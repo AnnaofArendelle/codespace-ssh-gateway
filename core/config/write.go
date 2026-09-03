@@ -36,6 +36,19 @@ provider: %s
   # 留空 = 自动使用你账号下唯一的那个 codespace。
   codespace: %q
 
+  # codespace 不存在时自动创建。gateway 会记住你连过的 codespace 是从哪个仓库来的，
+  # 所以删掉再连通常不用填这里；想指定规格/地区就取消注释：
+  create:
+    repository: ""            # owner/name，不填就用记住的那个
+    branch: ""                # 默认用仓库默认分支
+    machine: ""               # 规格，用 `+"`gateway codespace machines`"+` 查可选值
+                              #   basicLinux32gb   = 2 core / 8 GB
+                              #   standardLinux32gb = 4 core / 16 GB
+                              #   premiumLinux     = 8 core / 32 GB
+    location: ""              # 地区，如 WestUs2 / EastUs / WestEurope / SouthEastAsia
+    idle_timeout_minutes: 30  # GitHub 自己的空闲停机时间（5-240）
+    retention_period_minutes: 0
+
 `, token, environment)
 	}
 	fmt.Fprintf(&b, `ssh:

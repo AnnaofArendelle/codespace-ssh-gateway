@@ -55,6 +55,23 @@ type Diagnoser interface {
 	Diagnose(ctx context.Context) []Diagnostic
 }
 
+// MachineType is one size an environment can be created with.
+type MachineType struct {
+	Name        string  `json:"name"`
+	DisplayName string  `json:"display_name,omitempty"`
+	CPUs        int     `json:"cpus,omitempty"`
+	MemoryGB    float64 `json:"memory_gb,omitempty"`
+	StorageGB   float64 `json:"storage_gb,omitempty"`
+	Note        string  `json:"note,omitempty"`
+}
+
+// MachineLister is implemented by providers whose environments come in sizes,
+// so `gateway codespace machines` can show the real options instead of guesses.
+// An empty target means "whatever the provider is configured to create from".
+type MachineLister interface {
+	Machines(ctx context.Context, target string) ([]MachineType, error)
+}
+
 // Introspector is implemented by providers that can describe their own
 // configuration for status output. Values must never contain a secret.
 type Introspector interface {

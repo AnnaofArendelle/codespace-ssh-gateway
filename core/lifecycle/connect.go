@@ -34,7 +34,7 @@ func (m *Manager) Connect(ctx context.Context, handle string, req providers.Conn
 				return nil, env, fmt.Errorf("connecting to %s: %w", env.ID, ctx.Err())
 			case <-time.After(backoff):
 			}
-			if backoff < 5*time.Second {
+			if backoff < 15*time.Second {
 				backoff *= 2
 			}
 			// The environment may have gone away again between attempts.

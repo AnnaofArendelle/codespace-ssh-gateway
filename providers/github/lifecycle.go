@@ -21,6 +21,7 @@ func (p *Provider) List(ctx context.Context) ([]providers.Environment, error) {
 	}
 	out := make([]providers.Environment, 0, len(list))
 	for _, cs := range list {
+		p.rememberSource(cs)
 		out = append(out, cs.environment())
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -37,6 +38,7 @@ func (p *Provider) Get(ctx context.Context, id string) (providers.Environment, e
 	}
 	cs, err := p.api.getCodespace(ctx, id)
 	if err == nil {
+		p.rememberSource(cs, id)
 		return cs.environment(), nil
 	}
 	if !errors.Is(err, providers.ErrNotFound) {
@@ -49,6 +51,7 @@ func (p *Provider) Get(ctx context.Context, id string) (providers.Environment, e
 	}
 	for _, cs := range list {
 		if strings.EqualFold(cs.DisplayName, id) {
+			p.rememberSource(cs, id)
 			return cs.environment(), nil
 		}
 	}
@@ -134,8 +137,21 @@ func (p *Provider) Create(ctx context.Context, spec providers.CreateSpec) (provi
 		return providers.Environment{}, err
 	}
 	if cfg.Repository == "" {
+		// Nothing declared: rebuild from whatever this handle was made of last
+		// time, so deleting a codespace and reconnecting just works.
+		if src, ok := p.recallSource(spec.Name); ok {
+			cfg = src.merge(cfg)
+			p.log.Info("rebuilding codespace from a remembered source",
+				slog.String("handle", spec.Name),
+				slog.String("repository", cfg.Repository),
+				slog.String("machine", cfg.Machine))
+		}
+	}
+	if cfg.Repository == "" {
 		return providers.Environment{}, fmt.Errorf(
-			"cannot create a codespace: set github.create.repository (owner/name) in the config file")
+			"这个 codespace 不存在，也没有可用来创建的仓库：请在配置文件里设置 " +
+				"github.create.repository（owner/name），或先在 github.com/codespaces 建一个 " +
+				"codespace（之后 gateway 会记住它的仓库，删掉再连时自动重建）")
 	}
 	repo, err := p.api.getRepository(ctx, cfg.Repository)
 	if err != nil {
@@ -168,7 +184,31 @@ func (p *Provider) Create(ctx context.Context, spec providers.CreateSpec) (provi
 	}
 	p.log.Info("codespace created",
 		slog.String("codespace", cs.Name), slog.String("state", cs.State))
+	p.rememberSource(cs, spec.Name)
 	return cs.environment(), nil
+}
+
+// rememberSource records what a codespace was built from, under its own name,
+// its display name and any handle it was reached by.
+func (p *Provider) rememberSource(cs codespace, handles ...string) {
+	src := envSource{
+		Repository:       cs.Repository.FullName,
+		Branch:           cs.GitStatus.Ref,
+		Machine:          cs.Machine.Name,
+		Location:         cs.Location,
+		DevcontainerPath: cs.DevContainerPath,
+	}
+	names := append([]string{cs.Name, cs.DisplayName}, handles...)
+	p.sources.remember(src, names...)
+}
+
+// recallSource finds a remembered source for a handle, falling back to the only
+// repository the gateway has ever seen.
+func (p *Provider) recallSource(handle string) (envSource, bool) {
+	if src, ok := p.sources.lookup(handle); ok {
+		return src, true
+	}
+	return p.sources.any()
 }
 
 // mergeCreateOptions applies provider-specific overrides from a CreateSpec.
@@ -227,4 +267,43 @@ func asInt(raw any) (int, error) {
 		return n, nil
 	}
 	return 0, fmt.Errorf("%v is not a number", raw)
+}
+
+// Machines lists the machine types available for a repository. An empty target
+// falls back to the configured or remembered repository, so
+// `gateway codespace machines` works with no arguments.
+func (p *Provider) Machines(ctx context.Context, target string) ([]providers.MachineType, error) {
+	if target == "" {
+		target = p.cfg.Create.Repository
+	}
+	if target == "" {
+		if src, ok := p.recallSource(p.cfg.Codespace); ok {
+			target = src.Repository
+		}
+	}
+	if target == "" {
+		return nil, fmt.Errorf("不知道要查哪个仓库的机器规格：加个参数（owner/name）" +
+			"或者设置 github.create.repository")
+	}
+	list, err := p.api.listMachines(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	const gb = 1024 * 1024 * 1024
+	out := make([]providers.MachineType, 0, len(list))
+	for _, m := range list {
+		note := ""
+		if m.PrebuildAvailability != "" && m.PrebuildAvailability != "none" {
+			note = "prebuild: " + m.PrebuildAvailability
+		}
+		out = append(out, providers.MachineType{
+			Name:        m.Name,
+			DisplayName: m.DisplayName,
+			CPUs:        m.CPUs,
+			MemoryGB:    float64(m.MemoryInBytes) / gb,
+			StorageGB:   float64(m.StorageInBytes) / gb,
+			Note:        note,
+		})
+	}
+	return out, nil
 }

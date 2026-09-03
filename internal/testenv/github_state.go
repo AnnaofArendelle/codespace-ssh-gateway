@@ -109,6 +109,7 @@ func (g *GitHub) stop(w http.ResponseWriter, name string) {
 func (g *GitHub) create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		RepositoryID       int64  `json:"repository_id"`
+		Repo               string `json:"-"`
 		Ref                string `json:"ref"`
 		DisplayName        string `json:"display_name"`
 		Machine            string `json:"machine"`
@@ -124,6 +125,7 @@ func (g *GitHub) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g.created++
+	g.createdRepo = g.repoForID(body.RepositoryID)
 	name := "generated-codespace-1"
 	for i := 2; ; i++ {
 		if _, clash := g.codespaces[name]; !clash {
@@ -143,6 +145,14 @@ func (g *GitHub) create(w http.ResponseWriter, r *http.Request) {
 	g.mu.Unlock()
 
 	writeJSON(w, http.StatusCreated, payload)
+}
+
+// repoForID maps the id handed out by the repository endpoint back to a name.
+func (g *GitHub) repoForID(id int64) string {
+	if id == 4242 {
+		return "octo/demo"
+	}
+	return ""
 }
 
 func itoa(i int) string {

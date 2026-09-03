@@ -58,6 +58,7 @@ func (a *app) cmdSetup(args []string) error {
 	}
 
 	fmt.Fprintf(a.stdout, "\n配置完成：%s\n", path)
+	a.setupSSHAlias(p)
 	a.setupHints(path)
 	if autoStart || p.confirm("\n现在启动 gateway？", true) {
 		fmt.Fprintln(a.stdout)
@@ -65,6 +66,19 @@ func (a *app) cmdSetup(args []string) error {
 	}
 	fmt.Fprintf(a.stdout, "\n之后用 `gateway start` 启动。\n")
 	return nil
+}
+
+// setupSSHAlias offers to make `ssh root@codespace` work, which is the point of
+// the whole thing.
+func (a *app) setupSSHAlias(p *prompter) {
+	if !p.confirm(fmt.Sprintf("把 `Host %s` 写进 ~/.ssh/config，以后直接 `ssh root@%s`？",
+		DefaultSSHHost, DefaultSSHHost), true) {
+		return
+	}
+	if err := a.cmdSSHConfig([]string{"-write"}); err != nil {
+		fmt.Fprintf(a.stderr, "gateway: %s\n", err)
+		fmt.Fprintf(a.stdout, "  可以之后手动运行 `gateway ssh-config -write`\n")
+	}
 }
 
 // setupHints explains how to connect, including whether a credential is needed.
@@ -79,9 +93,8 @@ func (a *app) setupHints(path string) {
 	} else {
 		fmt.Fprintf(a.stdout, "监听 %s（对外开放），请先配置公钥或密码。\n", cfg.SSH.Listen)
 	}
-	fmt.Fprintf(a.stdout, "\n连接方式：\n  ssh -p %s root@127.0.0.1\n", port)
-	fmt.Fprintf(a.stdout, "\n想直接用 `ssh root@codespace`，把这段加进 ~/.ssh/config：\n")
-	fmt.Fprintf(a.stdout, "  Host codespace\n    HostName 127.0.0.1\n    Port %s\n    User root\n", port)
+	fmt.Fprintf(a.stdout, "\n连接方式：\n  ssh root@%s\n  ssh -p %s root@127.0.0.1   （等价写法）\n",
+		DefaultSSHHost, port)
 }
 
 func (a *app) setupProvider(p *prompter) (providers.Registration, error) {

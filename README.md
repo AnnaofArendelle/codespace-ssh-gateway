@@ -55,9 +55,15 @@ Token（输入不回显）:
 
 只有一个 codespace，直接使用：fantastic-tribble-4p5j55gj9f94x（RUNNING）
 
-配置完成。只监听本机 127.0.0.1:2222，本机连接不需要密钥或密码。
+配置完成。
+把 `Host codespace` 写进 ~/.ssh/config，以后直接 `ssh root@codespace`？ [Y/n]:
+只监听本机 127.0.0.1:2222，本机连接不需要密钥或密码。
 现在启动 gateway？ [Y/n]:
 ```
+
+向导会（默认同意）把这段写进 `~/.ssh/config`，所以 **`ssh root@codespace` 是默认用法**；
+原来的 `ssh -p 2222 root@127.0.0.1` 一样能用。这段是带标记的，`gateway ssh-config -write`
+可以随时重写，`-remove` 删掉，别名可以用 `-host` 改，不会碰你自己写的其他条目。
 
 不想用向导就直接写配置文件，效果完全一样：
 
@@ -83,6 +89,39 @@ Host codespace
 ```
 
 `root` 只是网关侧的用户名，和 codespace 里的真实用户（`vscode` 之类）无关。
+
+### codespace 不存在时自动创建
+
+gateway 会记住你连过的 codespace 是从哪个仓库、哪个规格建的（存在状态目录里）。
+所以**把 codespace 删掉再连，它会按原样重建一个**，配置里什么都不用加。
+
+想指定参数，或者账号里从来没有过 codespace，就填 `github.create`：
+
+```yaml
+github:
+  create:
+    repository: owner/name      # 必填项：从哪个仓库建
+    machine: basicLinux32gb     # 2 core/8 GB；4 core 是 standardLinux32gb
+    location: WestUs2           # 地区，影响延迟和可达性（见下文）
+    branch: main
+    idle_timeout_minutes: 30    # GitHub 自己的空闲停机时间（5-240）
+```
+
+规格名不用猜，问 GitHub 就行：
+
+```console
+$ gateway codespace machines
+NAME               CPU  内存     存储     说明
+basicLinux32gb     2    8 GB   32 GB
+standardLinux32gb  4    16 GB  32 GB
+
+写进配置：github.create.machine: <NAME>
+```
+
+账号里一个 codespace 都没有时，第一次 `ssh` 会以 `codespace` 为名字建一个
+（display name 就是这个名字，之后一直用它找回同一个），不需要先去网页上点。
+
+也可以手动建：`gateway codespace create -option machine=standardLinux32gb`。
 
 ### 需要更严格 / 对外开放时
 
@@ -198,8 +237,8 @@ github:                     # 段落名 = provider 的 config key
   host_key_policy: tofu     # tofu | strict | insecure（网关→codespace 这一跳）
   ssh_user: ""              # 覆盖远端登录名，留空则问 gh
   request_timeout: 30s
-  create:                   # 仅在目标不存在时使用
-    repository: owner/name  # 想让自动创建生效，必填
+  create:                   # 仅在目标不存在时使用；不填则用"记住的"那个仓库
+    repository: owner/name  # 从哪个仓库创建
     branch: ""
     machine: ""
     devcontainer_path: ""
@@ -226,7 +265,7 @@ lifecycle:
   create_timeout: 20m
   connect_timeout: 2m
   status_poll_interval: 2s
-  connect_retries: 6
+  connect_retries: 10       # 刚创建的 codespace 需要多试几次
   stop_on_last_disconnect: false
 
 log:
@@ -258,7 +297,8 @@ gateway status [-json]                运行中则显示实时会话/阶段，�
 gateway doctor [-json]                用真实 API 和 gh 做体检
 gateway config init|show|path|set-token|authorized-key
 gateway provider list
-gateway codespace list|select|status|stop|create|forget-host-key
+gateway codespace list|select|status|stop|create|machines|forget-host-key
+gateway ssh-config [-write|-remove] [-host codespace]
 gateway version
 ```
 
@@ -334,6 +374,9 @@ go vet ./...
 | 断开后停机（可选） | `TestStopOnLastDisconnect` |
 | `exec` 后端 + 本地 pty | `TestExecConnectorInteractive`（经由系统 `ssh`） |
 | 只有 token 的最简配置 | `TestTokenOnlyConfigJustWorks`（无密钥无密码连入，自动认出唯一 codespace） |
+| 删掉 codespace 后重连 | `TestRecreatesDeletedCodespaceFromRememberedRepository`（按记住的仓库重建） |
+| 账号里一个都没有 | `TestCreatesFirstCodespaceWhenNothingExists`（以 codespace 为名建一个并复用） |
+| ~/.ssh/config 段落 | `TestSSHConfigBlockIsManagedIdempotently`、`TestSSHConfigRefusesToClobberForeignHost` |
 | 对外监听但无凭据 | `TestPublicListenerNeedsACredential`（拒绝启动） |
 
 向导本身也在真实环境里跑过（伪终端驱动 + 真实 token）：token 不回显、当场验证、
@@ -365,6 +408,10 @@ scp -P 2222 file root@127.0.0.1:/tmp/   # subsystem/exec 转发
 
 ## 已知限制
 
+- 连接走 GitHub 的 Dev Tunnels（`*.rel.tunnels.api.visualstudio.com`）。如果你的
+  代理/防火墙拦了某个地区的这个域名，`gh` 自己也连不上（可以用
+  `gh codespace ssh -c <name> --config` 单独验证）；换 `github.create.location`
+  到一个能通的地区即可。gateway 遇到这种错误会直接告诉你是网络路径问题。
 - 每个 SSH 会话都会新建一条 `gh codespace ssh` 隧道，因此每次连接有 10 秒左右的固定开销
   （codespace 处于停止状态时首次连接 40~50 秒，含 GitHub 启动容器的时间）。
 

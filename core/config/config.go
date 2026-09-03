@@ -98,7 +98,7 @@ func Defaults() *Config {
 			CreateTimeout:      20 * time.Minute,
 			ConnectTimeout:     2 * time.Minute,
 			StatusPollInterval: 2 * time.Second,
-			ConnectRetries:     6,
+			ConnectRetries:     10,
 		},
 		Log:      LogConfig{Level: "info", Format: "text"},
 		Control:  ControlConfig{Enabled: true},

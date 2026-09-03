@@ -47,6 +47,7 @@ type Provider struct {
 	keys     *keyPair
 	hostKeys *hostKeyStore
 	users    *userCache
+	sources  *sourceCache
 	log      *slog.Logger
 
 	tokenSrc tokenSource
@@ -110,6 +111,7 @@ func New(ctx context.Context, deps providers.Deps) (providers.Provider, error) {
 		keys:          keys,
 		hostKeys:      newHostKeyStore(deps.StateDir, cfg.HostKeyPolicy, log),
 		users:         newUserCache(deps.StateDir, log),
+		sources:       newSourceCache(deps.StateDir, log),
 		log:           log,
 		tokenSrc:      src,
 		ghErr:         ghErr,
@@ -219,6 +221,9 @@ func (p *Provider) sshUserFor(ctx context.Context, id string, req providers.Conn
 	req.Notify("正在向 gh 查询 codespace 的 ssh 信息…")
 	target, err := p.gh.probeSSHTarget(ctx, id)
 	if err != nil {
+		if hint := tunnelNetworkHint(err); hint != "" {
+			return "", false, classifyConnectError(fmt.Errorf("%s；原始错误：%w", hint, err))
+		}
 		return "", false, classifyConnectError(
 			fmt.Errorf("determine ssh user for codespace %s: %w", id, err))
 	}

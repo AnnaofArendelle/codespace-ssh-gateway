@@ -132,6 +132,30 @@ func temporaryConnectError(err error) bool {
 	return false
 }
 
+// tunnelNetworkHint spots a blocked or flaky path to GitHub's Dev Tunnels
+// service, which looks like a gateway bug but is not one.
+func tunnelNetworkHint(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "tunnels.api.visualstudio.com") &&
+		!strings.Contains(msg, "error getting tunnel") {
+		return ""
+	}
+	switch {
+	case strings.Contains(msg, "tls handshake timeout"),
+		strings.Contains(msg, "timeout"),
+		strings.Contains(msg, "connection reset"),
+		strings.Contains(msg, "no such host"),
+		strings.Contains(msg, "proxyconnect"):
+		return "无法访问 GitHub 的 Dev Tunnels 服务（*.rel.tunnels.api.visualstudio.com）。" +
+			"这跟 gateway 配置无关：检查代理/防火墙是否放行该域名，" +
+			"或用 github.create.location 换一个地区"
+	}
+	return ""
+}
+
 func classifyConnectError(err error) error {
 	if err == nil {
 		return nil

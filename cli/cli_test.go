@@ -169,3 +169,71 @@ func TestVersionAndHelp(t *testing.T) {
 		t.Errorf("unknown command handling: code %d stderr %q", code, stderr)
 	}
 }
+
+func TestSSHConfigBlockIsManagedIdempotently(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.WriteFile(cfgPath, config.Template("github", "", "box", "127.0.0.1:2252")); err != nil {
+		t.Fatal(err)
+	}
+	sshCfg := filepath.Join(dir, "ssh_config")
+	if err := os.WriteFile(sshCfg, []byte("Host other\n  HostName example.test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write, then write again: the second run must not duplicate the block.
+	for i := 0; i < 2; i++ {
+		if code, stdout, stderr := run(t, cfgPath, "ssh-config", "-write", "-file", sshCfg); code != 0 {
+			t.Fatalf("ssh-config -write exited %d: %s%s", code, stdout, stderr)
+		}
+	}
+	raw, err := os.ReadFile(sshCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if n := strings.Count(text, "Host codespace"); n != 1 {
+		t.Errorf("block appears %d times, want 1:\n%s", n, text)
+	}
+	if !strings.Contains(text, "Port 2252") || !strings.Contains(text, "User root") {
+		t.Errorf("block does not point at the gateway:\n%s", text)
+	}
+	if !strings.Contains(text, "Host other") {
+		t.Error("the operator's own entries were dropped")
+	}
+
+	// Removing takes only our block away.
+	if code, _, stderr := run(t, cfgPath, "ssh-config", "-remove", "-file", sshCfg); code != 0 {
+		t.Fatalf("ssh-config -remove failed: %s", stderr)
+	}
+	raw, _ = os.ReadFile(sshCfg)
+	if strings.Contains(string(raw), "Host codespace") {
+		t.Errorf("block survived removal:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), "Host other") {
+		t.Error("removal ate the operator's entries")
+	}
+}
+
+func TestSSHConfigRefusesToClobberForeignHost(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := config.WriteFile(cfgPath, config.Template("github", "", "box", "127.0.0.1:2222")); err != nil {
+		t.Fatal(err)
+	}
+	sshCfg := filepath.Join(dir, "ssh_config")
+	if err := os.WriteFile(sshCfg, []byte("Host codespace\n  HostName somewhere.else\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run(t, cfgPath, "ssh-config", "-write", "-file", sshCfg)
+	if code == 0 {
+		t.Fatal("overwrote a Host entry it does not own")
+	}
+	if !strings.Contains(stderr, "codespace") {
+		t.Errorf("unhelpful error: %s", stderr)
+	}
+	raw, _ := os.ReadFile(sshCfg)
+	if !strings.Contains(string(raw), "somewhere.else") {
+		t.Error("the existing entry was modified")
+	}
+}

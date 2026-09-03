@@ -44,12 +44,14 @@ Commands:
   config path               Print the config and state paths
   config set-token          Read a token from stdin and store it
   config authorized-key     Add or list gateway client keys
+  ssh-config [-write]       打印或写入 ~/.ssh/config 里的 Host codespace 段落
   provider list             List compiled-in providers
   codespace list            List environments known to the provider
   codespace select <name>   Set the default environment
   codespace status [name]   Show one environment's provider state
   codespace stop [name]     Stop an environment now
   codespace create [name]   Create an environment from the configured template
+  codespace machines [repo] List the machine types a new environment can use
   codespace forget-host-key [name]
                             Drop pinned codespace host keys
   version                   Print the version
@@ -93,6 +95,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "setup", "wizard":
 		return a.exit(a.cmdSetup(cmdArgs))
+	case "ssh-config", "sshconfig":
+		return a.exit(a.cmdSSHConfig(cmdArgs))
 	case "start", "serve", "run":
 		return a.exit(a.cmdStart(cmdArgs))
 	case "stop":

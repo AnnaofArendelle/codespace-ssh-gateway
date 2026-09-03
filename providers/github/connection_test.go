@@ -259,3 +259,18 @@ func TestTemporaryConnectErrorClassification(t *testing.T) {
 type errTest string
 
 func (e errTest) Error() string { return string(e) }
+
+func TestTunnelNetworkHint(t *testing.T) {
+	blocked := errTest(`error connecting to codespace: error getting tunnel client: ` +
+		`Get "https://usw3.rel.tunnels.api.visualstudio.com/tunnels/x": net/http: TLS handshake timeout`)
+	hint := tunnelNetworkHint(blocked)
+	if hint == "" {
+		t.Fatal("a blocked Dev Tunnels path produced no hint")
+	}
+	if !strings.Contains(hint, "Dev Tunnels") {
+		t.Errorf("hint does not name the service: %q", hint)
+	}
+	if tunnelNetworkHint(errTest("ssh: unable to authenticate")) != "" {
+		t.Error("unrelated errors must not get the network hint")
+	}
+}

@@ -186,6 +186,32 @@ func (c *apiClient) createCodespace(ctx context.Context, req createRequest) (cod
 	return cs, nil
 }
 
+type machine struct {
+	Name                 string `json:"name"`
+	DisplayName          string `json:"display_name"`
+	CPUs                 int    `json:"cpus"`
+	MemoryInBytes        uint64 `json:"memory_in_bytes"`
+	StorageInBytes       uint64 `json:"storage_in_bytes"`
+	PrebuildAvailability string `json:"prebuild_availability"`
+}
+
+// listMachines asks GitHub which machine types a repository can use.
+func (c *apiClient) listMachines(ctx context.Context, nwo string) ([]machine, error) {
+	owner, name, ok := strings.Cut(nwo, "/")
+	if !ok || owner == "" || name == "" {
+		return nil, fmt.Errorf("repository %q must be owner/name", nwo)
+	}
+	var payload struct {
+		TotalCount int       `json:"total_count"`
+		Machines   []machine `json:"machines"`
+	}
+	path := "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/codespaces/machines"
+	if _, err := c.do(ctx, "GET", path, nil, &payload); err != nil {
+		return nil, err
+	}
+	return payload.Machines, nil
+}
+
 type repository struct {
 	ID            int64  `json:"id"`
 	FullName      string `json:"full_name"`

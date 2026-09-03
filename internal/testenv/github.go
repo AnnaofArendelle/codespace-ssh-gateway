@@ -34,12 +34,13 @@ type Codespace struct {
 type GitHub struct {
 	Server *httptest.Server
 
-	mu         sync.Mutex
-	codespaces map[string]*Codespace
-	calls      map[string]int
-	token      string
-	injections []injection
-	created    int
+	mu          sync.Mutex
+	codespaces  map[string]*Codespace
+	calls       map[string]int
+	token       string
+	injections  []injection
+	created     int
+	createdRepo string
 	// StartError, if set, makes POST .../start fail with this status.
 	StartError int
 	// CreateError, if set, makes POST /user/codespaces fail with this status.
@@ -111,6 +112,20 @@ func (g *GitHub) Calls(fragment string) int {
 		}
 	}
 	return total
+}
+
+// Delete removes a codespace, the way the GitHub UI does.
+func (g *GitHub) Delete(name string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	delete(g.codespaces, name)
+}
+
+// CreatedRepository is the repository the last create used.
+func (g *GitHub) CreatedRepository() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.createdRepo
 }
 
 // Created counts successful create calls.

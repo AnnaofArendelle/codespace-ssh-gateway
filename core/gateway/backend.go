@@ -87,6 +87,11 @@ func (g *Gateway) resolveEnvironment(ctx context.Context, hint string) (string, 
 	return handle, nil
 }
 
+// DefaultEnvironmentName is the handle used when nothing is configured and the
+// provider has to create the environment. It doubles as the display name, so
+// `ssh root@codespace` keeps reaching the same one afterwards.
+const DefaultEnvironmentName = "codespace"
+
 // ResolveEnvironment picks the target: what the caller asked for, else the
 // configured default, else the only environment the account has. That last step
 // is what lets a config with nothing but a token work.
@@ -110,6 +115,11 @@ func ResolveEnvironment(ctx context.Context, prov providers.Provider, hint strin
 	case 1:
 		return envs[0].ID, nil
 	case 0:
+		// Nothing exists yet. If the provider can create environments, hand back
+		// a stable handle and let the lifecycle create it on the way in.
+		if prov.Capabilities().Create {
+			return DefaultEnvironmentName, nil
+		}
 		return "", errors.New("这个账号还没有 codespace：先去 github.com/codespaces 建一个，" +
 			"或者设置 github.create.repository 让 gateway 自动创建")
 	default:

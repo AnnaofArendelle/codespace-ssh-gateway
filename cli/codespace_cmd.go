@@ -29,6 +29,8 @@ func (a *app) cmdEnvironment(args []string) error {
 		return a.envStop(rest)
 	case "create", "new":
 		return a.envCreate(rest)
+	case "machines", "machine":
+		return a.envMachines(rest)
 	case "forget-host-key":
 		return a.envForgetHostKey(rest)
 	default:
@@ -250,6 +252,43 @@ func (a *app) envCreate(args []string) error {
 		if env.DisplayName != "" && env.DisplayName != env.ID {
 			fmt.Fprintf(a.stdout, "display name %q keeps working as the gateway handle\n", env.DisplayName)
 		}
+		return nil
+	})
+}
+
+// envMachines shows the real machine types a new codespace can use.
+func (a *app) envMachines(args []string) error {
+	fs := a.flagSet("codespace machines")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	rest := fs.Args()
+	return a.withProvider(2*time.Minute, func(ctx context.Context, cfg *config.Config, p providers.Provider) error {
+		lister, ok := p.(providers.MachineLister)
+		if !ok {
+			return fmt.Errorf("provider %s 不区分机器规格", p.Name())
+		}
+		target := ""
+		if len(rest) > 0 {
+			target = rest[0]
+		}
+		machines, err := lister.Machines(ctx, target)
+		if err != nil {
+			return err
+		}
+		if a.jsonOut {
+			return a.writeJSON(machines)
+		}
+		tw := tabwriter.NewWriter(a.stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintf(tw, "NAME\tCPU\t内存\t存储\t说明\n")
+		for _, m := range machines {
+			fmt.Fprintf(tw, "%s\t%d\t%.0f GB\t%.0f GB\t%s\n",
+				m.Name, m.CPUs, m.MemoryGB, m.StorageGB, m.Note)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		fmt.Fprintf(a.stdout, "\n写进配置：github.create.machine: <NAME>\n")
 		return nil
 	})
 }
