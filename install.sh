@@ -32,9 +32,11 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 say "Fetching $asset ..."
-if command -v curl >/dev/null 2>&1 && curl -fsSL "$url" -o "$tmp/$NAME"; then
+# --retry: GitHub's CDN occasionally drops a TLS connection mid-transfer.
+if command -v curl >/dev/null 2>&1 &&
+	curl -fsSL --retry 3 --retry-connrefused --retry-delay 1 "$url" -o "$tmp/$NAME"; then
 	:
-elif command -v wget >/dev/null 2>&1 && wget -qO "$tmp/$NAME" "$url"; then
+elif command -v wget >/dev/null 2>&1 && wget -q --tries=3 -O "$tmp/$NAME" "$url"; then
 	:
 elif command -v go >/dev/null 2>&1; then
 	say "No release binary available; building from source with Go ..."
