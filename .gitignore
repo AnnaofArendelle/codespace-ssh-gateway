@@ -1,0 +1,7 @@
+# build output
+/gateway
+/dist/
+*.exe
+
+# local scratch
+*.log
