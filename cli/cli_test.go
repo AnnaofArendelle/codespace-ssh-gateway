@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,19 @@ func run(t *testing.T, cfgPath string, args ...string) (int, string, string) {
 	full := append([]string{"-config", cfgPath}, args...)
 	code := cli.Run(full, &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
+}
+
+// writeTestConfig renders a config that is fully self-contained: a test must
+// never read (or find a live gateway in) the machine's real state directory.
+func writeTestConfig(t *testing.T, dir, listen, token string) string {
+	t.Helper()
+	path := filepath.Join(dir, "config.yaml")
+	content := config.Template("github", token, "box", listen) +
+		fmt.Sprintf("\nstate_dir: %q\n", filepath.Join(dir, "state"))
+	if err := config.WriteFile(path, content); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestConfigInitWritesAPrivateFile(t *testing.T) {
@@ -64,10 +78,7 @@ func TestConfigInitWritesAPrivateFile(t *testing.T) {
 
 func TestConfigShowRedactsTheToken(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.WriteFile(cfgPath, config.Template("github", "gho_shouldnotappear1234", "box", ":2222")); err != nil {
-		t.Fatal(err)
-	}
+	cfgPath := writeTestConfig(t, dir, ":2222", "gho_shouldnotappear1234")
 	code, stdout, stderr := run(t, cfgPath, "config", "show")
 	if code != 0 {
 		t.Fatalf("config show exited %d: %s", code, stderr)
@@ -82,10 +93,7 @@ func TestConfigShowRedactsTheToken(t *testing.T) {
 
 func TestProviderListShowsTheSelectedProvider(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.WriteFile(cfgPath, config.Template("github", "", "box", ":2222")); err != nil {
-		t.Fatal(err)
-	}
+	cfgPath := writeTestConfig(t, dir, ":2222", "")
 	code, stdout, stderr := run(t, cfgPath, "provider", "list")
 	if code != 0 {
 		t.Fatalf("provider list exited %d: %s", code, stderr)
@@ -97,10 +105,7 @@ func TestProviderListShowsTheSelectedProvider(t *testing.T) {
 
 func TestStatusWithoutARunningGateway(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.WriteFile(cfgPath, config.Template("github", "", "box", ":2222")); err != nil {
-		t.Fatal(err)
-	}
+	cfgPath := writeTestConfig(t, dir, ":2222", "")
 	code, stdout, _ := run(t, cfgPath, "status")
 	if code != 0 {
 		t.Fatalf("status exited %d", code)
@@ -123,10 +128,7 @@ func TestMissingConfigIsExplained(t *testing.T) {
 
 func TestSetTokenPatchesConfigFromStdin(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.WriteFile(cfgPath, config.Template("github", "", "box", ":2222")); err != nil {
-		t.Fatal(err)
-	}
+	cfgPath := writeTestConfig(t, dir, ":2222", "")
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -172,10 +174,7 @@ func TestVersionAndHelp(t *testing.T) {
 
 func TestSSHConfigBlockIsManagedIdempotently(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.WriteFile(cfgPath, config.Template("github", "", "box", "127.0.0.1:2252")); err != nil {
-		t.Fatal(err)
-	}
+	cfgPath := writeTestConfig(t, dir, "127.0.0.1:2252", "")
 	sshCfg := filepath.Join(dir, "ssh_config")
 	if err := os.WriteFile(sshCfg, []byte("Host other\n  HostName example.test\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -217,10 +216,7 @@ func TestSSHConfigBlockIsManagedIdempotently(t *testing.T) {
 
 func TestSSHConfigRefusesToClobberForeignHost(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	if err := config.WriteFile(cfgPath, config.Template("github", "", "box", "127.0.0.1:2222")); err != nil {
-		t.Fatal(err)
-	}
+	cfgPath := writeTestConfig(t, dir, "127.0.0.1:2222", "")
 	sshCfg := filepath.Join(dir, "ssh_config")
 	if err := os.WriteFile(sshCfg, []byte("Host codespace\n  HostName somewhere.else\n"), 0o600); err != nil {
 		t.Fatal(err)
