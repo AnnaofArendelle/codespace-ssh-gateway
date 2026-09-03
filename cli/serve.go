@@ -59,32 +59,27 @@ func (a *app) cmdStart(args []string) error {
 func (a *app) printBanner(gw *gateway.Gateway, cfg *config.Config) {
 	st := gw.Status()
 	out := a.stdout
-	fmt.Fprintf(out, "\nssh-gateway %s listening on %s\n\n", Version, st.Listen)
+	fmt.Fprintf(out, "\nssh-gateway %s 已启动，监听 %s\n\n", Version, st.Listen)
 
 	tw := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
 	fmt.Fprintf(tw, "  provider\t%s\n", st.Provider)
-	fmt.Fprintf(tw, "  default environment\t%s\n", fieldOrDash(st.DefaultEnvironment))
+	fmt.Fprintf(tw, "  目标 codespace\t%s\n", fieldOrDash(st.DefaultEnvironment))
+	fmt.Fprintf(tw, "  客户端认证\t%s\n", st.ClientAuth)
 	fmt.Fprintf(tw, "  host key\t%s\n", st.HostKeyFingerprint)
-	fmt.Fprintf(tw, "  client auth\t%d authorized key(s), password auth %s\n",
-		st.AuthorizedKeys, onOff(st.PasswordAuth))
-	fmt.Fprintf(tw, "  auto create\t%s\n", onOff(st.AutoCreate))
-	fmt.Fprintf(tw, "  idle handling\t%s\n", idleSummary(st))
+	fmt.Fprintf(tw, "  停机策略\t%s\n", idleSummary(st))
 	if cfg.Path() != "" {
-		fmt.Fprintf(tw, "  config\t%s\n", cfg.Path())
+		fmt.Fprintf(tw, "  配置文件\t%s\n", cfg.Path())
 	}
 	tw.Flush()
 
 	if pw, ok := gw.GeneratedPassword(); ok {
-		fmt.Fprintf(out, "\n  generated ssh password (shown once): %s\n", pw)
-		fmt.Fprintf(out, "  set ssh.password in the config file to keep a fixed one.\n")
+		fmt.Fprintf(out, "\n  本次生成的 ssh 密码（只显示一次）：%s\n", pw)
+		fmt.Fprintf(out, "  想固定下来就在配置里写 ssh.password。\n")
 	}
 
-	_, port, _ := strings.Cut(st.Listen, ":")
-	if port == "" {
-		port = "2222"
-	}
-	fmt.Fprintf(out, "\nSSH endpoint:\n  ssh -p %s root@<this-host>\n", port)
-	fmt.Fprintf(out, "\nOr add this to ~/.ssh/config so that `ssh root@codespace` just works:\n")
+	port := listenPort(st.Listen)
+	fmt.Fprintf(out, "\n现在就能连：\n  ssh -p %s root@%s\n", port, hostForConfig(st.Listen))
+	fmt.Fprintf(out, "\n想直接用 `ssh root@codespace`，把这段加进 ~/.ssh/config：\n")
 	fmt.Fprintf(out, "  Host codespace\n    HostName %s\n    Port %s\n    User root\n\n",
 		hostForConfig(st.Listen), port)
 }
@@ -97,15 +92,21 @@ func onOff(b bool) string {
 }
 
 func idleSummary(st gateway.Status) string {
-	if !st.Capabilities.ProviderManagedIdle {
-		return "provider does not manage idle state"
+	if st.StopOnLastDisconnect {
+		return "断开最后一个会话即调用 Provider.Stop()（stop_on_last_disconnect: true）"
 	}
-	return fmt.Sprintf("%s (attribution: %s; the gateway runs no idle timer)",
+	if !st.Capabilities.ProviderManagedIdle {
+		return "provider 不管理 idle 状态"
+	}
+	return fmt.Sprintf("交给 %s（ssh 是否算活跃：%s；gateway 自己没有计时器）",
 		st.Capabilities.IdleMechanism, st.Capabilities.SSHActivityAttribution)
 }
 
 func hostForConfig(listen string) string {
 	host, _, found := strings.Cut(listen, ":")
+	if host == "127.0.0.1" || host == "localhost" || host == "[::1]" {
+		return "127.0.0.1"
+	}
 	if !found || host == "" || host == "0.0.0.0" || host == "[::]" {
 		if h, err := os.Hostname(); err == nil && h != "" {
 			return h

@@ -35,21 +35,7 @@ func init() {
 		Summary:               "GitHub Codespaces (REST API for lifecycle, `gh codespace ssh` for connections)",
 		ConfigKey:             "github",
 		DefaultEnvironmentKey: "codespace",
-		SetupQuestions: []providers.SetupQuestion{
-			{
-				Key:      []string{"create", "repository"},
-				Prompt:   "Repository to create a codespace from (owner/name)",
-				Help:     "Only used when the codespace above does not exist yet. Leave empty to disable auto-create.",
-				Optional: true,
-			},
-			{
-				Key:      []string{"create", "machine"},
-				Prompt:   "Machine type for new codespaces (e.g. basicLinux32gb)",
-				Help:     "Leave empty to let GitHub pick its default.",
-				Optional: true,
-			},
-		},
-		Factory: New,
+		Factory:               New,
 	})
 }
 
@@ -230,7 +216,7 @@ func (p *Provider) sshUserFor(ctx context.Context, id string, req providers.Conn
 	if !p.gh.Available() {
 		return "", false, errGHMissing
 	}
-	req.Notify("asking gh for the codespace's ssh details")
+	req.Notify("正在向 gh 查询 codespace 的 ssh 信息…")
 	target, err := p.gh.probeSSHTarget(ctx, id)
 	if err != nil {
 		return "", false, classifyConnectError(

@@ -15,7 +15,7 @@ import (
 // OpenSession implements ssh.Backend: it is the whole "ssh in, environment out"
 // path. The SSH layer knows nothing about how this happens.
 func (g *Gateway) OpenSession(ctx context.Context, req sshsrv.OpenRequest) (*sshsrv.OpenResult, error) {
-	handle, err := g.resolveEnvironment(req.EnvironmentHint)
+	handle, err := g.resolveEnvironment(ctx, req.EnvironmentHint)
 	if err != nil {
 		return nil, err
 	}
@@ -75,9 +75,22 @@ func (g *Gateway) OpenSession(ctx context.Context, req sshsrv.OpenRequest) (*ssh
 	}, nil
 }
 
-// resolveEnvironment picks the target: what the client asked for, else the
-// provider's configured default.
-func (g *Gateway) resolveEnvironment(hint string) (string, error) {
+func (g *Gateway) resolveEnvironment(ctx context.Context, hint string) (string, error) {
+	handle, err := ResolveEnvironment(ctx, g.prov, hint)
+	if err != nil {
+		return "", err
+	}
+	if hint == "" && g.prov.DefaultEnvironment() == "" {
+		g.log.Info("using the only environment this account has",
+			slog.String("environment", handle))
+	}
+	return handle, nil
+}
+
+// ResolveEnvironment picks the target: what the caller asked for, else the
+// configured default, else the only environment the account has. That last step
+// is what lets a config with nothing but a token work.
+func ResolveEnvironment(ctx context.Context, prov providers.Provider, hint string) (string, error) {
 	hint = strings.TrimSpace(hint)
 	if hint != "" {
 		if err := validEnvironmentName(hint); err != nil {
@@ -85,11 +98,28 @@ func (g *Gateway) resolveEnvironment(hint string) (string, error) {
 		}
 		return hint, nil
 	}
-	if def := g.prov.DefaultEnvironment(); def != "" {
+	if def := prov.DefaultEnvironment(); def != "" {
 		return def, nil
 	}
-	return "", fmt.Errorf("this gateway has no default environment configured; " +
-		"run `gateway codespace select <name>` or connect as user+environment")
+
+	envs, err := prov.List(ctx)
+	if err != nil {
+		return "", fmt.Errorf("没有配置目标 codespace，列举也失败了：%w", err)
+	}
+	switch len(envs) {
+	case 1:
+		return envs[0].ID, nil
+	case 0:
+		return "", errors.New("这个账号还没有 codespace：先去 github.com/codespaces 建一个，" +
+			"或者设置 github.create.repository 让 gateway 自动创建")
+	default:
+		names := make([]string, 0, len(envs))
+		for _, e := range envs {
+			names = append(names, e.ID)
+		}
+		return "", fmt.Errorf("有多个 codespace（%s）：请设置 github.codespace，"+
+			"或者用 root+<名字>@gateway 连接", strings.Join(names, ", "))
+	}
 }
 
 // validEnvironmentName keeps obviously bogus handles out of provider calls.
@@ -114,13 +144,13 @@ func (g *Gateway) userFacing(handle string, err error) error {
 	msg := g.redact.Redact(err.Error())
 	switch {
 	case errors.Is(err, providers.ErrAuth):
-		return fmt.Errorf("the gateway could not authenticate to %s: %s", g.prov.Name(), msg)
+		return fmt.Errorf("gateway 无法通过 %s 认证：%s", g.prov.Name(), msg)
 	case errors.Is(err, providers.ErrNotFound):
-		return fmt.Errorf("environment %q does not exist and could not be created: %s", handle, msg)
+		return fmt.Errorf("codespace %q 不存在，也无法创建：%s", handle, msg)
 	case errors.Is(err, context.DeadlineExceeded):
-		return fmt.Errorf("timed out preparing environment %q: %s", handle, msg)
+		return fmt.Errorf("准备 codespace %q 超时：%s", handle, msg)
 	case errors.Is(err, context.Canceled):
-		return fmt.Errorf("preparing environment %q was cancelled: %s", handle, msg)
+		return fmt.Errorf("准备 codespace %q 被取消：%s", handle, msg)
 	case errors.Is(err, session.ErrTooManySessions), errors.Is(err, session.ErrTooManySessionsForEnv):
 		return err
 	default:

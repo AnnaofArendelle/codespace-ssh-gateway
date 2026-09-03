@@ -51,7 +51,7 @@ func (p *Provider) connectExec(ctx context.Context, id string, req providers.Con
 		args = append(args, req.Command)
 	}
 
-	req.Notify("opening codespace session (gh codespace ssh)")
+	req.Notify("正在打开 codespace 会话（gh codespace ssh）")
 	procCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	established := false
 	defer func() {

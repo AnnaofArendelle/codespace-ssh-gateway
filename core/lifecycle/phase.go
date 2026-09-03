@@ -52,6 +52,26 @@ func PhaseForState(s providers.State) Phase {
 	}
 }
 
+// Notice is the short line a waiting SSH client is shown for this phase. An
+// empty string means the phase is not worth interrupting the terminal for.
+func (p Phase) Notice() string {
+	switch p {
+	case PhaseProvisioning:
+		return "codespace 不存在，正在创建…"
+	case PhaseStarting:
+		return "codespace 已停止，正在启动…"
+	case PhaseStopping:
+		return "codespace 正在关机，等它结束后再启动…"
+	case PhaseRunning:
+		return "codespace 已就绪"
+	case PhaseConnecting:
+		return "正在建立连接…"
+	case PhaseFailed:
+		return "准备 codespace 失败"
+	}
+	return ""
+}
+
 // Transition is one recorded phase change.
 type Transition struct {
 	From   Phase     `json:"from"`

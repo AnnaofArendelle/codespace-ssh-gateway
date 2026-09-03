@@ -48,7 +48,7 @@ func (a *app) configInit(args []string) error {
 	)
 	fs.BoolVar(&tokenStdin, "token-stdin", false, "read the provider token from stdin")
 	fs.StringVar(&environment, "codespace", "", "default environment (codespace) name")
-	fs.StringVar(&listen, "listen", ":2222", "ssh listen address")
+	fs.StringVar(&listen, "listen", "127.0.0.1:2222", "ssh listen address")
 	fs.StringVar(&provider, "provider", "github", "provider to configure")
 	fs.BoolVar(&force, "force", false, "overwrite an existing config file")
 	if err := fs.Parse(args); err != nil {

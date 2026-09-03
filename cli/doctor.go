@@ -51,23 +51,20 @@ func (a *app) cmdDoctor(args []string) error {
 		add("listen address", true, cfg.SSH.Listen+" is free", "")
 	}
 
-	// Client authentication.
+	// Client authentication. A loopback listener needs no credential at all.
 	auth, authErr := sshsrv.NewAuthorizer(sshsrv.AuthConfig{
 		AuthorizedKeysFile:   cfg.AuthorizedKeysPath(),
 		AuthorizedKeysInline: cfg.SSH.AuthorizedKeysInline,
 		PasswordAuth:         cfg.SSH.PasswordAuth,
 		Password:             cfg.SSH.Password,
 		AllowedUsers:         cfg.SSH.AllowedUsers,
+		AllowAnonymous:       gateway.LoopbackListen(cfg.SSH.Listen),
 	}, a.log)
 	if authErr != nil {
 		add("client auth", false, authErr.Error(),
-			"gateway config authorized-key add ~/.ssh/id_ed25519.pub")
+			"bind ssh.listen to 127.0.0.1, or add a key with `gateway config authorized-key add`")
 	} else {
-		detail := fmt.Sprintf("%d authorized key(s)", auth.KeyCount())
-		if auth.PasswordEnabled() {
-			detail += ", password auth enabled"
-		}
-		add("client auth", true, detail, "")
+		add("client auth", true, auth.Mode(), "")
 	}
 
 	// Host key: report the fingerprint clients will see, creating it if needed.

@@ -26,8 +26,7 @@ func TestInvalidTokenIsReported(t *testing.T) {
 	if code == 0 {
 		t.Fatal("exec succeeded with an invalid token")
 	}
-	if !strings.Contains(strings.ToLower(stderr), "authenticate") &&
-		!strings.Contains(stderr, "401") {
+	if !strings.Contains(stderr, "认证") && !strings.Contains(stderr, "401") {
 		t.Errorf("stderr does not explain the auth failure: %q", stderr)
 	}
 	if strings.Contains(stderr, "gho_wrongtoken") {
@@ -99,7 +98,7 @@ func TestRetriesUntilSSHServerAccepts(t *testing.T) {
 	if stdout != "ready\n" || code != 0 {
 		t.Fatalf("got %q/%d after retries, want \"ready\\n\"/0 (stderr %q)", stdout, code, stderr)
 	}
-	if !strings.Contains(stderr, "retrying") {
+	if !strings.Contains(stderr, "重试") {
 		t.Errorf("the client was not told about the retries: %q", stderr)
 	}
 }
@@ -120,7 +119,7 @@ func TestProviderAPITimeout(t *testing.T) {
 		t.Fatal("session succeeded although the API timed out")
 	}
 	lower := strings.ToLower(stderr)
-	if !strings.Contains(lower, "timed out") && !strings.Contains(lower, "deadline") &&
+	if !strings.Contains(stderr, "超时") && !strings.Contains(lower, "deadline") &&
 		!strings.Contains(lower, "timeout") {
 		t.Errorf("stderr does not mention a timeout: %q", stderr)
 	}
@@ -140,7 +139,7 @@ func TestMissingCodespaceWithoutAutoCreate(t *testing.T) {
 	if code == 0 {
 		t.Fatal("session succeeded although the codespace does not exist")
 	}
-	if !strings.Contains(stderr, "does not exist") {
+	if !strings.Contains(stderr, "不存在") {
 		t.Errorf("stderr does not explain the missing codespace: %q", stderr)
 	}
 }

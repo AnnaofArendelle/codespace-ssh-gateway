@@ -69,22 +69,6 @@ type Deps struct {
 // Factory builds a provider from its config section.
 type Factory func(ctx context.Context, deps Deps) (Provider, error)
 
-// SetupQuestion is one provider-specific question `gateway setup` should ask.
-// The answer is written to the provider's config section under Key, so the core
-// wizard stays free of provider knowledge.
-type SetupQuestion struct {
-	// Key is the path inside the provider section, e.g. {"create","repository"}.
-	Key []string
-	// Prompt is shown to the operator.
-	Prompt string
-	// Help is printed above the prompt when non-empty.
-	Help string
-	// Default is offered when the operator just presses enter.
-	Default string
-	// Optional questions may be answered with an empty string.
-	Optional bool
-}
-
 // Registration describes a provider to the CLI before it is instantiated.
 type Registration struct {
 	Name    string
@@ -95,10 +79,7 @@ type Registration struct {
 	// default environment ("codespace" for GitHub). It is what
 	// `gateway codespace select` writes.
 	DefaultEnvironmentKey string
-	// SetupQuestions are asked by `gateway setup` after the token and the
-	// default environment have been chosen.
-	SetupQuestions []SetupQuestion
-	Factory        Factory
+	Factory               Factory
 }
 
 var (

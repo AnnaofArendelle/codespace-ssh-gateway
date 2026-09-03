@@ -121,7 +121,7 @@ func TestPatchKeepsEverythingElse(t *testing.T) {
 	if !strings.Contains(text, "gho_thetoken12345") {
 		t.Error("patching the config dropped the token")
 	}
-	if !strings.Contains(text, "# ssh-gateway configuration") {
+	if !strings.Contains(text, "# ssh-gateway 配置文件") {
 		t.Error("patching the config dropped its comments")
 	}
 	cfg, err := config.Load(path)

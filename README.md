@@ -24,57 +24,74 @@ codespace 由 GitHub 官方 idle 机制自行停止（详见下文 “计费与 
 
 ## 快速开始
 
-一行安装，一行启动：
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AnnaofArendelle/codespace-ssh-gateway/main/install.sh | sh
-gateway            # 首次运行自动进入交互式向导，配置完直接开始服务
+gateway                      # 首次运行走向导：只问一个 token
+ssh root@codespace           # 完事
 ```
 
-装了 Go 的话也可以：
+**只需要一个 token。** 没有密钥要生成、没有密码要设、没有 codespace 要新建。
+默认只监听 `127.0.0.1:2222`，本机连接不需要任何凭据——能连到这个端口的人本来就已经登录了这台机器。
+
+向导长这样（中文，全部有默认值，回车即可）：
+
+```
+ssh-gateway 首次配置
+--------------------
+配置文件：~/.config/ssh-gateway/config.yaml（权限 0600）
+
+Provider：github
+
+需要一个有 codespace 权限的 GitHub token（https://github.com/settings/tokens 新建，勾选 codespace）
+
+token 怎么给？
+ * 1) 现在粘贴 token          写入配置文件，权限 0600
+   2) 用环境变量 $GITHUB_TOKEN / $GH_TOKEN
+   3) 用 gh 已登录的账号
+   4) 以后再说
+选择 [1]: 1
+Token（输入不回显）:
+  已验证：可见 1 个 codespace
+
+只有一个 codespace，直接使用：fantastic-tribble-4p5j55gj9f94x（RUNNING）
+
+配置完成。只监听本机 127.0.0.1:2222，本机连接不需要密钥或密码。
+现在启动 gateway？ [Y/n]:
+```
+
+不想用向导就直接写配置文件，效果完全一样：
+
+```yaml
+# ~/.config/ssh-gateway/config.yaml   (0600)
+provider: github
+github:
+  token: ghp_xxxxxxxxxxxx     # 需要 codespace 权限；留空则用 $GITHUB_TOKEN / gh auth token
+  codespace: ""               # 留空 = 自动用账号下唯一的那个
+```
 
 ```bash
-go install github.com/AnnaofArendelle/codespace-ssh-gateway@latest   # 二进制名为 codespace-ssh-gateway
-# 或者克隆后： go build -o gateway .   &&   ./gateway
+gateway start
 ```
 
-`gateway`（裸命令）在没有配置文件时会跑 `gateway setup`：菜单式选择，全部有默认值，
-回车即可。它会**当场用真实 API 验证 token**、把你的 codespace 列成菜单让你挑、
-导入 `~/.ssh/*.pub`，然后写好 `~/.config/ssh-gateway/config.yaml`（0600）并问你是否立刻启动。
-
-```
-How should the gateway authenticate to github?
- * 1) Paste a token now            stored in ~/.config/ssh-gateway/config.yaml (mode 0600)
-   2) Use $GITHUB_TOKEN or $GH_TOKEN from the environment
-   3) Use the GitHub CLI's own login        the gateway calls `gh auth token`
-   4) Skip for now
-choice [1]: 1
-Token (input hidden):
-  ok: authenticated, 1 environment(s) visible
-
-Which environment should `ssh root@gateway` reach?
- * 1) fantastic-tribble-4p5j55gj9f94x   state RUNNING, AnnaofArendelle/Docker-Desktop
-   2) Type a name
-   3) Decide later
-choice [1]:
-```
-
-不想交互（CI、Ansible、Docker）就完全用文件/命令声明，效果一样：
-
-```bash
-gateway config init -codespace my-box -listen :2222
-echo "$GITHUB_TOKEN" | gateway config set-token          # 或直接写 github.token / 留空用环境变量
-gateway config authorized-key add ~/.ssh/id_ed25519.pub
-gateway doctor && gateway start
-```
-
-启动后把提示的片段加进 `~/.ssh/config`，`ssh root@codespace` 就能用：
+把这段加进 `~/.ssh/config`，`ssh root@codespace` 就能用（也可以直接 `ssh -p 2222 root@127.0.0.1`）：
 
 ```
 Host codespace
   HostName 127.0.0.1
   Port 2222
   User root
+```
+
+`root` 只是网关侧的用户名，和 codespace 里的真实用户（`vscode` 之类）无关。
+
+### 需要更严格 / 对外开放时
+
+默认的"免认证"只在监听地址是回环地址时生效。一旦改成 `:2222` 这种对外监听，
+网关会**拒绝启动**，直到你配置了公钥或密码：
+
+```bash
+gateway config authorized-key add ~/.ssh/id_ed25519.pub   # 公钥
+# 或者在配置里： ssh: { password_auth: true }              # 不填 password 则每次启动随机生成并打印一次
 ```
 
 ## 依赖
@@ -190,11 +207,12 @@ github:                     # 段落名 = provider 的 config key
     retention_period_minutes: 0
 
 ssh:                        # 网关自己的 SSH 前门
-  listen: ":2222"           # 公网部署可用 ":22"
+  listen: "127.0.0.1:2222"  # 默认只监听本机 = 免认证；改成 ":2222"/":22" 则必须配置凭据
   host_key: ""              # 默认 <state>/host_ed25519，自动生成且不会变
   authorized_keys: ""       # 默认配置文件同目录的 authorized_keys
   authorized_keys_inline: []
   password_auth: false      # 默认关闭；打开且未设 password 则启动时随机生成并打印一次
+                            # 只监听本机且既无公钥也无密码时 = 免认证（见"快速开始"）
   password: ""
   allowed_users: []         # 空 = 任何用户名都接受（ssh root@… 直接可用）
   max_sessions: 0
@@ -271,8 +289,11 @@ systemctl --user enable --now ssh-gateway
 - 客户端认证与“网关→codespace”认证完全分离：前者是 `authorized_keys`，
   后者是网关自己生成的 ed25519 密钥（`<state>/providers/github/codespace_ed25519`），
   由 `gh codespace ssh -- -i` 注册进 codespace。
+- **客户端认证按监听地址决定**：默认 `127.0.0.1:2222` 且没配置任何凭据时走 SSH 的
+  `none` 认证（免密钥免密码）——这一跳的安全边界就是"你已经登录了这台机器"。
+  一旦监听地址不是回环地址而又没有公钥/密码，网关**拒绝启动**并告诉你怎么改，
+  不会把 codespace 静默暴露到网络上。
 - 密码认证默认关闭；打开但没设密码时随机生成（20 字节 base32）并只打印一次，绝不使用固定弱口令。
-  完全没有任何认证方式时启动直接失败。
 - 网关 host key 持久化，绝不每次重启换一把；`authorized_keys` 里带 `command=` 之类
   选项的行会被拒绝（避免给人“已经限制住了”的错觉）。
 - 网关→codespace 这一跳默认 TOFU 固定 host key（`tofu`），不匹配时报错并告诉你
@@ -312,6 +333,8 @@ go vet ./...
 | 断开后不停机（默认） | `TestProviderOwnsIdleByDefault`（0 次 stop 调用） |
 | 断开后停机（可选） | `TestStopOnLastDisconnect` |
 | `exec` 后端 + 本地 pty | `TestExecConnectorInteractive`（经由系统 `ssh`） |
+| 只有 token 的最简配置 | `TestTokenOnlyConfigJustWorks`（无密钥无密码连入，自动认出唯一 codespace） |
+| 对外监听但无凭据 | `TestPublicListenerNeedsACredential`（拒绝启动） |
 
 向导本身也在真实环境里跑过（伪终端驱动 + 真实 token）：token 不回显、当场验证、
 真实 codespace 菜单、密钥导入、写出 0600 配置。

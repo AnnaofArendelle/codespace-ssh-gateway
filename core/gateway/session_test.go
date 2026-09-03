@@ -251,7 +251,7 @@ func TestClientSeesStartupProgress(t *testing.T) {
 	if err != nil || code != 0 {
 		t.Fatalf("exec: %v code=%d stderr=%q", err, code, stderr)
 	}
-	for _, want := range []string{"STARTING", "RUNNING"} {
+	for _, want := range []string{"正在启动", "已就绪"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("client was not told about %s; stderr was:\n%s", want, stderr)
 		}

@@ -128,7 +128,7 @@ func (c *Config) validate() error {
 		return errors.New("provider must be set")
 	}
 	if c.SSH.Listen == "" {
-		c.SSH.Listen = ":2222"
+		c.SSH.Listen = Defaults().SSH.Listen
 	}
 	if _, _, err := net.SplitHostPort(c.SSH.Listen); err != nil {
 		return fmt.Errorf("ssh.listen %q is not host:port: %w", c.SSH.Listen, err)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 
@@ -199,6 +200,14 @@ func (a *app) logger(cfg *config.Config, quiet bool) (*logging.Redactor, func(),
 	}
 	a.log = logger
 	return a.redact, func() { _ = closer.Close() }, nil
+}
+
+// listenPort extracts the port from a listen address, defaulting to 2222.
+func listenPort(listen string) string {
+	if _, port, err := net.SplitHostPort(listen); err == nil && port != "" {
+		return port
+	}
+	return "2222"
 }
 
 func fieldOrDash(s string) string {

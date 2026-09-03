@@ -2,7 +2,6 @@ package lifecycle
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"sort"
 	"sync"
@@ -180,7 +179,9 @@ func (m *Manager) setPhase(env string, to Phase, reason string) {
 		slog.String("from", string(from)),
 		slog.String("to", string(to)),
 		slog.String("reason", reason))
-	m.notify(env, fmt.Sprintf("%s: %s", to, reason))
+	if notice := to.Notice(); notice != "" {
+		m.notify(env, notice)
+	}
 }
 
 // Phase returns the current phase of an environment.

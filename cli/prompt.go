@@ -71,7 +71,7 @@ func (p *prompter) confirm(question string, def bool) bool {
 		if p.eof {
 			return def
 		}
-		fmt.Fprintln(p.out, "  please answer y or n")
+		fmt.Fprintln(p.out, "  请回答 y 或 n")
 	}
 }
 
@@ -95,7 +95,7 @@ func (p *prompter) menu(title string, items []menuItem, def int) int {
 		}
 	}
 	for {
-		fmt.Fprintf(p.out, "choice [%d]: ", def+1)
+		fmt.Fprintf(p.out, "选择 [%d]: ", def+1)
 		answer := p.line()
 		if answer == "" {
 			return def
@@ -107,7 +107,7 @@ func (p *prompter) menu(title string, items []menuItem, def int) int {
 		if p.eof {
 			return def
 		}
-		fmt.Fprintf(p.out, "  enter a number between 1 and %d\n", len(items))
+		fmt.Fprintf(p.out, "  请输入 1 到 %d 之间的数字\n", len(items))
 	}
 }
 
@@ -115,7 +115,7 @@ func (p *prompter) menu(title string, items []menuItem, def int) int {
 func (p *prompter) secret(question string) string {
 	restore, quiet := disableEcho()
 	if !quiet {
-		fmt.Fprintln(p.out, "  (note: your terminal echoes input, so the value will be visible)")
+		fmt.Fprintln(p.out, "  （注意：这个终端无法关闭回显，输入内容会显示出来）")
 	}
 	fmt.Fprintf(p.out, "%s: ", question)
 	value := p.line()

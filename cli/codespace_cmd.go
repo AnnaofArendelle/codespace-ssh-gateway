@@ -145,12 +145,13 @@ func (a *app) envStatus(args []string) error {
 	}
 	rest := fs.Args()
 	return a.withProvider(2*time.Minute, func(ctx context.Context, cfg *config.Config, p providers.Provider) error {
-		name := p.DefaultEnvironment()
+		hint := ""
 		if len(rest) > 0 {
-			name = rest[0]
+			hint = rest[0]
 		}
-		if name == "" {
-			return errors.New("no environment given and no default configured")
+		name, err := gateway.ResolveEnvironment(ctx, p, hint)
+		if err != nil {
+			return err
 		}
 		env, err := p.Get(ctx, name)
 		if err != nil {
@@ -207,12 +208,9 @@ func (a *app) envStop(args []string) error {
 	}
 
 	return a.withProvider(5*time.Minute, func(ctx context.Context, cfg *config.Config, p providers.Provider) error {
-		target := name
-		if target == "" {
-			target = p.DefaultEnvironment()
-		}
-		if target == "" {
-			return errors.New("no environment given and no default configured")
+		target, err := gateway.ResolveEnvironment(ctx, p, name)
+		if err != nil {
+			return err
 		}
 		env, err := p.Get(ctx, target)
 		if err != nil {

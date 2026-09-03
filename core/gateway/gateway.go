@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/AnnaofArendelle/codespace-ssh-gateway/core/config"
@@ -78,6 +80,9 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, red *logging
 			PasswordAuth:         cfg.SSH.PasswordAuth,
 			Password:             cfg.SSH.Password,
 			AllowedUsers:         cfg.SSH.AllowedUsers,
+			// A loopback-only gateway needs no credential ceremony: reaching it
+			// already requires an account on this machine.
+			AllowAnonymous: LoopbackListen(cfg.SSH.Listen),
 		},
 	}, g, log)
 	if err != nil {
@@ -89,6 +94,23 @@ func New(ctx context.Context, cfg *config.Config, log *slog.Logger, red *logging
 		red.Add(pw)
 	}
 	return g, nil
+}
+
+// LoopbackListen reports whether an address only accepts local connections.
+// It decides whether the gateway may skip client authentication entirely.
+func LoopbackListen(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(host) {
+	case "localhost":
+		return true
+	case "":
+		return false // ":2222" listens on every interface
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
 }
 
 // BuildProvider instantiates the configured provider. The CLI uses it for

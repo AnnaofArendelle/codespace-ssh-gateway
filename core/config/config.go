@@ -84,7 +84,9 @@ func Defaults() *Config {
 		Provider: "github",
 		StateDir: DefaultStateDir(),
 		SSH: SSHConfig{
-			Listen:            ":2222",
+			// Loopback by default: that is what makes the zero-configuration
+			// local setup safe to leave without a key or password.
+			Listen:            "127.0.0.1:2222",
 			HandshakeTimeout:  30 * time.Second,
 			ShutdownGrace:     5 * time.Second,
 			MaxSessions:       0,

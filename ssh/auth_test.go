@@ -176,3 +176,37 @@ func TestHostKeyIsCreatedOnceAndPersisted(t *testing.T) {
 		t.Error("host key changed between loads")
 	}
 }
+
+// On a loopback listener with nothing configured, clients get in with no
+// credential at all: that is the whole point of the local setup.
+func TestAuthorizerAnonymousWhenLocalAndUnconfigured(t *testing.T) {
+	auth, err := sshsrv.NewAuthorizer(sshsrv.AuthConfig{AllowAnonymous: true}, logging.Discard())
+	if err != nil {
+		t.Fatalf("anonymous authorizer rejected: %v", err)
+	}
+	if !auth.Anonymous() {
+		t.Error("expected anonymous mode")
+	}
+	if auth.KeyCount() != 0 || auth.PasswordEnabled() {
+		t.Error("anonymous mode should not invent credentials")
+	}
+	if !strings.Contains(auth.Mode(), "免认证") {
+		t.Errorf("Mode() = %q, want it to say no auth is required", auth.Mode())
+	}
+
+	// A configured key wins over anonymous mode, even with AllowAnonymous set.
+	signer, line := testKey(t)
+	withKey, err := sshsrv.NewAuthorizer(sshsrv.AuthConfig{
+		AllowAnonymous:       true,
+		AuthorizedKeysInline: []string{line},
+	}, logging.Discard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withKey.Anonymous() {
+		t.Error("a configured key must still be required")
+	}
+	if _, err := withKey.AuthenticateKey("root", signer.PublicKey()); err != nil {
+		t.Errorf("configured key rejected: %v", err)
+	}
+}

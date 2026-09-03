@@ -57,7 +57,7 @@ func (m *Manager) Ensure(ctx context.Context, envID string, notify func(string))
 		m.log.Info("joined in-flight lifecycle operation",
 			slog.String("environment", envID), slog.Int("waiters", waiters))
 		if notify != nil {
-			notify(fmt.Sprintf("another session is already preparing %s; waiting for it", envID))
+			notify(fmt.Sprintf("已有会话正在准备 %s，等它完成…", envID))
 		}
 	} else {
 		go m.runEnsure(opCtx, envID, op)
@@ -258,8 +258,8 @@ func (m *Manager) waitFor(ctx context.Context, handle, id, what string, done fun
 		}
 		if since := m.now().Sub(lastNotify); since >= 5*time.Second {
 			lastNotify = m.now()
-			m.notify(handle, fmt.Sprintf("waiting for %s (provider state %s, %s elapsed)",
-				what, env.NativeState, m.now().Sub(startedAt).Round(time.Second)))
+			m.notify(handle, fmt.Sprintf("仍在等待（provider 状态 %s，已等待 %s）",
+				env.NativeState, m.now().Sub(startedAt).Round(time.Second)))
 		}
 		switch env.State {
 		case providers.StateFailed:

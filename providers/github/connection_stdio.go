@@ -24,7 +24,7 @@ func (p *Provider) connectStdio(ctx context.Context, id string, req providers.Co
 		return nil, err
 	}
 
-	req.Notify("opening codespace tunnel (gh codespace ssh --stdio)")
+	req.Notify("正在打开 codespace 隧道（gh codespace ssh --stdio）")
 	procCtx, cancelProc := context.WithCancel(context.WithoutCancel(ctx))
 	established := false
 	defer func() {
@@ -84,7 +84,7 @@ func (p *Provider) connectStdio(ctx context.Context, id string, req providers.Co
 			case <-tunnelDone:
 				return
 			case <-ticker.C:
-				req.Notify(fmt.Sprintf("still opening the codespace tunnel (%s elapsed)",
+				req.Notify(fmt.Sprintf("隧道还在建立中（已用 %s）",
 					time.Since(started).Round(time.Second)))
 			}
 		}

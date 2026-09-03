@@ -28,7 +28,7 @@ func (m *Manager) Connect(ctx context.Context, handle string, req providers.Conn
 
 	for attempt := 0; attempt <= m.opts.ConnectRetries; attempt++ {
 		if attempt > 0 {
-			req.Notify(fmt.Sprintf("connection not ready yet; retrying (%d/%d)", attempt, m.opts.ConnectRetries))
+			req.Notify(fmt.Sprintf("连接还没就绪，重试中（%d/%d）", attempt, m.opts.ConnectRetries))
 			select {
 			case <-ctx.Done():
 				return nil, env, fmt.Errorf("connecting to %s: %w", env.ID, ctx.Err())

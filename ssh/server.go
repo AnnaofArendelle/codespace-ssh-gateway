@@ -66,6 +66,9 @@ func New(cfg Config, backend Backend, log *slog.Logger) (*Server, error) {
 	}
 
 	s.sshCfg = &gossh.ServerConfig{
+		// With nothing configured on a loopback listener the gateway accepts any
+		// client: no key, no password, no prompt. Anything else authenticates.
+		NoClientAuth: auth.Anonymous(),
 		PublicKeyCallback: func(c gossh.ConnMetadata, key gossh.PublicKey) (*gossh.Permissions, error) {
 			login := ParseLogin(c.User())
 			perms, err := auth.AuthenticateKey(login.User, key)
@@ -73,6 +76,13 @@ func New(cfg Config, backend Backend, log *slog.Logger) (*Server, error) {
 				return nil, err
 			}
 			return perms, nil
+		},
+		NoClientAuthCallback: func(c gossh.ConnMetadata) (*gossh.Permissions, error) {
+			login := ParseLogin(c.User())
+			if err := auth.CheckUser(login.User); err != nil {
+				return nil, err
+			}
+			return &gossh.Permissions{Extensions: map[string]string{"gateway-auth": "none"}}, nil
 		},
 		AuthLogCallback: func(c gossh.ConnMetadata, method string, err error) {
 			if err == nil {

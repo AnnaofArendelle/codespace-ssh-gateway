@@ -45,6 +45,14 @@ type options struct {
 	token                string
 	requestTimeout       string
 	extraGitHub          string
+	// noClientKeys leaves the gateway without any authorized key, which on a
+	// loopback listener means "no credential required".
+	noClientKeys bool
+	// noDefaultEnv leaves github.codespace empty so the gateway has to work out
+	// the target itself.
+	noDefaultEnv bool
+	// listen overrides the listen address (default 127.0.0.1:0).
+	listen string
 }
 
 type harness struct {
@@ -94,6 +102,19 @@ func newHarness(t *testing.T, opt options) *harness {
 
 	clientSigner, clientAuthorized, clientKeyPath := newKeyFile(t, dir)
 
+	handleValue := opt.handle
+	if opt.noDefaultEnv {
+		handleValue = ""
+	}
+	authorizedKeys := fmt.Sprintf("\n  authorized_keys_inline:\n    - %q", clientAuthorized)
+	if opt.noClientKeys {
+		authorizedKeys = ""
+	}
+	listen := opt.listen
+	if listen == "" {
+		listen = "127.0.0.1:0"
+	}
+
 	cfgPath := filepath.Join(dir, "config.yaml")
 	cfg := fmt.Sprintf(`provider: github
 state_dir: %q
@@ -108,9 +129,7 @@ github:
 %s
 
 ssh:
-  listen: 127.0.0.1:0
-  authorized_keys_inline:
-    - %q
+  listen: %s%s
   handshake_timeout: 15s
   shutdown_grace: 2s
 
@@ -130,9 +149,9 @@ control:
   enabled: false
 `,
 		filepath.Join(dir, "state"),
-		opt.token, opt.handle, gh.URL(), os.Args[0], opt.connector, opt.requestTimeout,
+		opt.token, handleValue, gh.URL(), os.Args[0], opt.connector, opt.requestTimeout,
 		indentBlock(opt.extraGitHub),
-		clientAuthorized,
+		listen, authorizedKeys,
 		opt.autoCreate, opt.stopOnLastDisconnect)
 
 	if opt.createRepo != "" {
@@ -246,6 +265,17 @@ func (h *harness) dial(login string) *gossh.Client {
 		h.t.Fatalf("dial gateway: %v", err)
 	}
 	return client
+}
+
+// dialAnonymous connects with no credential at all, the way a local user does
+// against a loopback gateway.
+func (h *harness) dialAnonymous(login string) (*gossh.Client, error) {
+	cfg := &gossh.ClientConfig{
+		User:            login,
+		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
+		Timeout:         15 * time.Second,
+	}
+	return gossh.Dial("tcp", h.addr, cfg)
 }
 
 func (h *harness) tryDial(login string) (*gossh.Client, error) {

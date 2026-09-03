@@ -11,69 +11,40 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Template renders a starter config file. The token is written only if the
-// operator supplied one; the file is always created mode 0600.
+// Template renders a starter config file: the few lines that actually matter,
+// with everything else left to the documented defaults.
 func Template(provider, token, environment, listen string) string {
 	if provider == "" {
 		provider = "github"
 	}
 	if listen == "" {
-		listen = ":2222"
+		listen = "127.0.0.1:2222"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, `# ssh-gateway configuration.
-# This file can hold a credential: keep it mode 0600.
+	fmt.Fprintf(&b, `# ssh-gateway 配置文件。可能包含 token，请保持 0600 权限。
+# 最少只需要填一个 token，然后 `+"`gateway start`"+` 就能用 ssh root@codespace 连接。
 
 provider: %s
 
 `, provider)
 	if provider == "github" {
 		fmt.Fprintf(&b, `github:
-  # Personal access token with the "codespace" scope. Leave empty to fall back
-  # to $GITHUB_TOKEN, $GH_TOKEN, or the GitHub CLI's own auth (`+"`gh auth token`"+`).
+  # GitHub token，需要 codespace 权限。
+  # 留空则依次尝试 $GITHUB_TOKEN、$GH_TOKEN、gh auth token。
   token: %q
-  # Default codespace served when a client does not name one.
+  # 要连接的 codespace（名字或显示名都行）。
+  # 留空 = 自动使用你账号下唯一的那个 codespace。
   codespace: %q
-  # Connection backend, all of which run the official `+"`gh codespace ssh`"+`:
-  #   auto  - prefer stdio, fall back to exec
-  #   stdio - `+"`gh codespace ssh --stdio`"+` + native SSH client (recommended)
-  #   exec  - `+"`gh codespace ssh`"+` on a local pty
-  connector: auto
-  # Only used when the codespace above does not exist yet.
-  create:
-    repository: ""            # owner/name (required for auto-create)
-    branch: ""                # defaults to the repository default branch
-    machine: ""               # e.g. basicLinux32gb; empty = GitHub default
-    devcontainer_path: ""
-    idle_timeout_minutes: 30  # GitHub's own idle stop window
-    retention_period_minutes: 0
 
 `, token, environment)
 	}
 	fmt.Fprintf(&b, `ssh:
+  # 只监听本机：本机连接不需要任何密钥或密码。
+  # 想让别的机器连进来，就改成 ":2222" 并配置 authorized_keys 或 ssh.password_auth。
   listen: %q
-  # Keys allowed to use the gateway. An "authorized_keys" file next to this
-  # config is also read when present.
-  authorized_keys_inline: []
-  # Password auth is off by default. If enabled without a password, the
-  # gateway generates a random one at startup and prints it once.
-  password_auth: false
-  # Empty means any username is accepted (ssh root@host works).
-  allowed_users: []
 
-lifecycle:
-  auto_create: true
-  start_timeout: 5m
-  create_timeout: 20m
-  connect_timeout: 2m
-  # Keep this false to let the provider's official idle mechanism own the
-  # lifecycle. Setting it true makes the gateway stop the environment as soon
-  # as its last session closes.
-  stop_on_last_disconnect: false
-
-log:
-  level: info
-  format: text
+# 其他可选项（连接后端、自动创建 codespace、公钥/密码认证、超时、日志）
+# 都有合理默认值，需要时参考 README。
 `, listen)
 	return b.String()
 }

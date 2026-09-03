@@ -25,6 +25,11 @@ type AuthConfig struct {
 	// AllowedUsers restricts the login name. Empty means any name is accepted,
 	// so `ssh root@gateway` works without creating a root user anywhere.
 	AllowedUsers []string
+	// AllowAnonymous lets clients in without any credential when none is
+	// configured. The gateway only sets this for a loopback listener, where the
+	// machine's own user boundary is the security boundary; that keeps the
+	// common local setup free of key and password ceremony.
+	AllowAnonymous bool
 }
 
 type authorizedKey struct {
@@ -39,13 +44,15 @@ type Authorizer struct {
 	passwordAuth bool
 	password     secret.Value
 	generated    bool
+	anonymous    bool
 	allowed      map[string]bool
 	log          *slog.Logger
 }
 
-// ErrNoAuthMethods means the gateway would have been open to everyone.
-var ErrNoAuthMethods = errors.New("no authentication method configured: add a public key " +
-	"(ssh.authorized_keys_inline or the authorized_keys file) or set ssh.password_auth")
+// ErrNoAuthMethods means the gateway would have been open to the network.
+var ErrNoAuthMethods = errors.New("no authentication configured for a non-loopback listener: " +
+	"bind ssh.listen to 127.0.0.1, or add a public key (ssh.authorized_keys / " +
+	"ssh.authorized_keys_inline) or set ssh.password_auth: true")
 
 // NewAuthorizer loads the authorized keys and validates that at least one
 // authentication method exists. When password auth is enabled without a
@@ -97,7 +104,12 @@ func NewAuthorizer(cfg AuthConfig, log *slog.Logger) (*Authorizer, error) {
 		a.generated = true
 	}
 	if len(a.keys) == 0 && !a.passwordAuth {
-		return nil, ErrNoAuthMethods
+		if !cfg.AllowAnonymous {
+			return nil, ErrNoAuthMethods
+		}
+		// Local-only and nothing configured: let clients straight in, which is
+		// what "ssh root@codespace should just work" means on one's own machine.
+		a.anonymous = true
 	}
 
 	if len(cfg.AllowedUsers) > 0 {
@@ -142,6 +154,23 @@ func (a *Authorizer) GeneratedPassword() (string, bool) {
 
 // KeyCount is the number of authorized public keys.
 func (a *Authorizer) KeyCount() int { return len(a.keys) }
+
+// Anonymous reports whether clients may connect without a credential.
+func (a *Authorizer) Anonymous() bool { return a.anonymous }
+
+// Mode describes the effective client authentication, for banners and status.
+func (a *Authorizer) Mode() string {
+	switch {
+	case a.anonymous:
+		return "免认证（仅本机监听）"
+	case len(a.keys) > 0 && a.passwordAuth:
+		return fmt.Sprintf("%d 个公钥 + 密码", len(a.keys))
+	case len(a.keys) > 0:
+		return fmt.Sprintf("%d 个公钥", len(a.keys))
+	default:
+		return "密码"
+	}
+}
 
 // PasswordEnabled reports whether password auth is on.
 func (a *Authorizer) PasswordEnabled() bool { return a.passwordAuth }

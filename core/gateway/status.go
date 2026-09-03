@@ -12,23 +12,25 @@ import (
 // the control socket and rendered by `gateway status`. It never contains a
 // credential.
 type Status struct {
-	Provider             string                 `json:"provider"`
-	ProviderSummary      string                 `json:"provider_summary,omitempty"`
-	ProviderInfo         map[string]string      `json:"provider_info,omitempty"`
-	Capabilities         providers.Capabilities `json:"capabilities"`
-	Listen               string                 `json:"listen"`
-	HostKeyFingerprint   string                 `json:"host_key_fingerprint"`
-	DefaultEnvironment   string                 `json:"default_environment,omitempty"`
-	ConfigPath           string                 `json:"config_path,omitempty"`
-	StateDir             string                 `json:"state_dir"`
-	StartedAt            time.Time              `json:"started_at"`
-	Uptime               string                 `json:"uptime"`
-	AuthorizedKeys       int                    `json:"authorized_keys"`
-	PasswordAuth         bool                   `json:"password_auth"`
-	AutoCreate           bool                   `json:"auto_create"`
-	StopOnLastDisconnect bool                   `json:"stop_on_last_disconnect"`
-	Sessions             []session.Info         `json:"sessions"`
-	Environments         []lifecycle.EnvStatus  `json:"environments"`
+	Provider           string                 `json:"provider"`
+	ProviderSummary    string                 `json:"provider_summary,omitempty"`
+	ProviderInfo       map[string]string      `json:"provider_info,omitempty"`
+	Capabilities       providers.Capabilities `json:"capabilities"`
+	Listen             string                 `json:"listen"`
+	HostKeyFingerprint string                 `json:"host_key_fingerprint"`
+	DefaultEnvironment string                 `json:"default_environment,omitempty"`
+	ConfigPath         string                 `json:"config_path,omitempty"`
+	StateDir           string                 `json:"state_dir"`
+	StartedAt          time.Time              `json:"started_at"`
+	Uptime             string                 `json:"uptime"`
+	AuthorizedKeys     int                    `json:"authorized_keys"`
+	PasswordAuth       bool                   `json:"password_auth"`
+	// ClientAuth describes the effective client authentication in one line.
+	ClientAuth           string                `json:"client_auth"`
+	AutoCreate           bool                  `json:"auto_create"`
+	StopOnLastDisconnect bool                  `json:"stop_on_last_disconnect"`
+	Sessions             []session.Info        `json:"sessions"`
+	Environments         []lifecycle.EnvStatus `json:"environments"`
 }
 
 // Status snapshots the gateway.
@@ -45,6 +47,7 @@ func (g *Gateway) Status() Status {
 		Uptime:               time.Since(g.startedAt).Round(time.Second).String(),
 		AuthorizedKeys:       g.srv.Authorizer().KeyCount(),
 		PasswordAuth:         g.srv.Authorizer().PasswordEnabled(),
+		ClientAuth:           g.srv.Authorizer().Mode(),
 		AutoCreate:           g.cfg.Lifecycle.AutoCreate,
 		StopOnLastDisconnect: g.cfg.Lifecycle.StopOnLastDisconnect,
 		Sessions:             g.sess.List(),
