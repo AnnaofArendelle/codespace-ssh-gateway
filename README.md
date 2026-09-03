@@ -25,7 +25,7 @@ codespace 由 GitHub 官方 idle 机制自行停止（详见下文 “计费与 
 ## 快速开始
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AnnaofArendelle/codespace-ssh-gateway/main/install.sh | sh
+curl -fsSL --retry 3 https://raw.githubusercontent.com/AnnaofArendelle/codespace-ssh-gateway/main/install.sh | sh
 gateway                      # 首次运行走向导：只问一个 token
 ssh root@codespace           # 完事
 ```
@@ -364,6 +364,9 @@ scp -P 2222 file root@127.0.0.1:/tmp/   # subsystem/exec 转发
 可以看到每一步（包括 `gh` 的 argv，token 不会出现在日志里）。
 
 ## 已知限制
+
+- 每个 SSH 会话都会新建一条 `gh codespace ssh` 隧道，因此每次连接有 10 秒左右的固定开销
+  （codespace 处于停止状态时首次连接 40~50 秒，含 GitHub 启动容器的时间）。
 
 - `exec` 后端的退出码是 `gh` 的退出码，不是远端命令的；也不能转发 SSH 信号
   （这是 `gh codespace ssh` 自身的行为）。默认的 `stdio` 后端没有这个问题。
