@@ -111,12 +111,16 @@ func (m *Manager) ensure(ctx context.Context, handle string) (providers.Environm
 			m.setPhase(handle, PhaseFailed, "lookup failed")
 			return providers.Environment{}, err
 		}
-		if !m.opts.AutoCreate {
+		// The configured codespace may simply have been deleted; if the account
+		// has exactly one other, use it instead of failing or creating.
+		adopted, ok := m.adopt(ctx, handle)
+		if ok {
+			env = adopted
+		} else if !m.opts.AutoCreate {
 			m.recordErr(handle, err)
 			return providers.Environment{}, fmt.Errorf(
 				"auto-create is disabled (lifecycle.auto_create: false): %w", err)
-		}
-		if env, err = m.create(ctx, handle); err != nil {
+		} else if env, err = m.create(ctx, handle); err != nil {
 			return providers.Environment{}, err
 		}
 	}
@@ -193,8 +197,23 @@ func (m *Manager) get(ctx context.Context, id string) (providers.Environment, er
 		lastErr = err
 		m.log.Warn("transient provider error, retrying",
 			slog.String("environment", id), slog.Int("attempt", attempt+1), slog.Any("error", err))
+		m.notify(id, fmt.Sprintf("GitHub API 暂时不通，重试中（%d/3）", attempt+1))
 	}
 	return providers.Environment{}, lastErr
+}
+
+// adopt looks for an environment to use when the configured one is gone. Using
+// the account's only other environment beats both failing and silently paying
+// for a new one; it is announced so nothing happens behind the operator's back.
+func (m *Manager) adopt(ctx context.Context, handle string) (providers.Environment, bool) {
+	envs, err := m.prov.List(ctx)
+	if err != nil || len(envs) != 1 {
+		return providers.Environment{}, false
+	}
+	m.log.Warn("configured environment is gone; using the only one this account has",
+		slog.String("configured", handle), slog.String("using", envs[0].ID))
+	m.notify(handle, fmt.Sprintf("配置里的 %s 已不存在，改用账号里唯一的 %s", handle, envs[0].ID))
+	return envs[0], true
 }
 
 func (m *Manager) create(ctx context.Context, handle string) (providers.Environment, error) {

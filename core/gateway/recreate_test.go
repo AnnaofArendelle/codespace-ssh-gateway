@@ -90,3 +90,44 @@ func TestCreatesFirstCodespaceWhenNothingExists(t *testing.T) {
 		t.Errorf("created %d codespaces after reconnecting, want 1", n)
 	}
 }
+
+// The configured codespace may have been deleted on github.com. When exactly one
+// other exists, the gateway uses it and says so, instead of failing or paying
+// for a new one.
+func TestAdoptsTheRemainingCodespaceWhenConfiguredOneIsGone(t *testing.T) {
+	h := newHarness(t, options{handle: "deleted-box", state: "", autoCreate: true})
+	h.gh.Add(testCodespace("survivor-box", "Available"))
+	h.start()
+
+	client := h.dial("root")
+	defer client.Close()
+	stdout, stderr, code, err := h.exec(client, "echo adopted")
+	if err != nil || code != 0 {
+		t.Fatalf("exec: %v code=%d stderr=%q", err, code, stderr)
+	}
+	if stdout != "adopted\n" {
+		t.Fatalf("got %q", stdout)
+	}
+	if n := h.gh.Created(); n != 0 {
+		t.Errorf("created %d codespaces; the existing one should have been used", n)
+	}
+	if !strings.Contains(stderr, "survivor-box") {
+		t.Errorf("the client was not told which codespace was used: %q", stderr)
+	}
+}
+
+// Whatever happens, the client hears something before the first API call.
+func TestClientHearsSomethingImmediately(t *testing.T) {
+	h := newHarness(t, options{state: "Available"})
+	h.start()
+
+	client := h.dial("root")
+	defer client.Close()
+	_, stderr, _, err := h.exec(client, "echo hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr, "正在准备") {
+		t.Errorf("no early progress line, a slow network would look like a hang: %q", stderr)
+	}
+}

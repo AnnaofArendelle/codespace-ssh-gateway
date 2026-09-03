@@ -44,6 +44,10 @@ type SSHConfig struct {
 	HandshakeTimeout     time.Duration `yaml:"handshake_timeout"`
 	Banner               string        `yaml:"banner"`
 	ShutdownGrace        time.Duration `yaml:"shutdown_grace"`
+	// InstallAlias keeps a `Host codespace` block in ~/.ssh/config up to date on
+	// every start, so `ssh root@codespace` works without a separate step. Set it
+	// to false to manage ~/.ssh/config yourself.
+	InstallAlias *bool `yaml:"install_alias"`
 }
 
 // LifecycleConfig bounds the orchestration the gateway performs. There is
@@ -76,6 +80,11 @@ type LogConfig struct {
 type ControlConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Socket  string `yaml:"socket"`
+}
+
+// AliasEnabled reports whether the gateway may keep the ~/.ssh/config entry.
+func (c *Config) AliasEnabled() bool {
+	return c.SSH.InstallAlias == nil || *c.SSH.InstallAlias
 }
 
 // Defaults returns a config with every default filled in.

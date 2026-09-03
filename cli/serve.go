@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -50,8 +51,31 @@ func (a *app) cmdStart(args []string) error {
 	if err := gw.Listen(); err != nil {
 		return err
 	}
+	a.ensureSSHAlias(cfg)
 	a.printBanner(gw, cfg)
 	return gw.Run(ctx)
+}
+
+// ensureSSHAlias keeps ~/.ssh/config in step with the gateway so that
+// `ssh root@codespace` is always the shortest way in. It never overwrites an
+// entry it does not own, and ssh.install_alias: false turns it off.
+func (a *app) ensureSSHAlias(cfg *config.Config) {
+	if !cfg.AliasEnabled() {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".ssh", "config")
+	block := sshConfigBlock(DefaultSSHHost, hostForConfig(cfg.SSH.Listen), listenPort(cfg.SSH.Listen))
+	action, err := patchSSHConfig(path, block, DefaultSSHHost)
+	switch {
+	case err != nil:
+		fmt.Fprintf(a.stderr, "gateway: 没有更新 %s：%s\n", path, err)
+	case action == "已写入", action == "已更新":
+		fmt.Fprintf(a.stdout, "%s %s：ssh root@%s 现在可用\n", action, path, DefaultSSHHost)
+	}
 }
 
 // printBanner tells the operator exactly how to connect, which is the whole

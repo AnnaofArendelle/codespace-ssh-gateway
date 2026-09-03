@@ -181,3 +181,25 @@ func TestCapabilitiesAreHonestAboutIdle(t *testing.T) {
 		t.Error("create should be off until a repository is configured")
 	}
 }
+
+func TestCreateSourcesListsRepositories(t *testing.T) {
+	gh := testenv.NewGitHub(t, testToken)
+	p := newTestProvider(t, gh, "")
+
+	sources, err := p.CreateSources(context.Background(), 20)
+	if err != nil {
+		t.Fatalf("create sources: %v", err)
+	}
+	if len(sources) != 2 {
+		t.Fatalf("got %d sources, want 2: %+v", len(sources), sources)
+	}
+	if sources[0].Name != "octo/demo" {
+		t.Errorf("first source is %q, want the most recently pushed repository", sources[0].Name)
+	}
+	if !strings.Contains(sources[1].Detail, "私有") {
+		t.Errorf("private repository not marked: %q", sources[1].Detail)
+	}
+	if !strings.Contains(sources[0].Detail, "main") {
+		t.Errorf("default branch missing: %q", sources[0].Detail)
+	}
+}

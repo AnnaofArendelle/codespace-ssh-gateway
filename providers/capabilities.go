@@ -72,6 +72,22 @@ type MachineLister interface {
 	Machines(ctx context.Context, target string) ([]MachineType, error)
 }
 
+// CreateSource is something a new environment can be created from (for GitHub
+// Codespaces: a repository).
+type CreateSource struct {
+	// Name is what goes into the provider's create configuration.
+	Name string `json:"name"`
+	// Detail is a short human hint, e.g. the default branch or last push time.
+	Detail string `json:"detail,omitempty"`
+}
+
+// CreateSourceLister is implemented by providers that can enumerate what an
+// environment may be created from, so setup can offer a menu instead of asking
+// the operator to type an identifier from memory.
+type CreateSourceLister interface {
+	CreateSources(ctx context.Context, limit int) ([]CreateSource, error)
+}
+
 // Introspector is implemented by providers that can describe their own
 // configuration for status output. Values must never contain a secret.
 type Introspector interface {

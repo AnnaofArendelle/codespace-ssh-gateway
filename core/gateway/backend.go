@@ -15,7 +15,11 @@ import (
 // OpenSession implements ssh.Backend: it is the whole "ssh in, environment out"
 // path. The SSH layer knows nothing about how this happens.
 func (g *Gateway) OpenSession(ctx context.Context, req sshsrv.OpenRequest) (*sshsrv.OpenResult, error) {
-	handle, err := g.resolveEnvironment(ctx, req.EnvironmentHint)
+	// Say something before the first network call: on a slow link, resolving the
+	// target can take a while and silence looks like a hang.
+	req.Connect.Notify("正在准备 codespace…")
+
+	handle, err := g.resolveEnvironment(ctx, req.EnvironmentHint, req.Connect.Progress)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +79,8 @@ func (g *Gateway) OpenSession(ctx context.Context, req sshsrv.OpenRequest) (*ssh
 	}, nil
 }
 
-func (g *Gateway) resolveEnvironment(ctx context.Context, hint string) (string, error) {
-	handle, err := ResolveEnvironment(ctx, g.prov, hint)
+func (g *Gateway) resolveEnvironment(ctx context.Context, hint string, notify func(string)) (string, error) {
+	handle, err := ResolveEnvironment(ctx, g.prov, hint, notify)
 	if err != nil {
 		return "", err
 	}
@@ -95,7 +99,12 @@ const DefaultEnvironmentName = "codespace"
 // ResolveEnvironment picks the target: what the caller asked for, else the
 // configured default, else the only environment the account has. That last step
 // is what lets a config with nothing but a token work.
-func ResolveEnvironment(ctx context.Context, prov providers.Provider, hint string) (string, error) {
+func ResolveEnvironment(ctx context.Context, prov providers.Provider, hint string, notify func(string)) (string, error) {
+	note := func(msg string) {
+		if notify != nil {
+			notify(msg)
+		}
+	}
 	hint = strings.TrimSpace(hint)
 	if hint != "" {
 		if err := validEnvironmentName(hint); err != nil {
@@ -107,6 +116,7 @@ func ResolveEnvironment(ctx context.Context, prov providers.Provider, hint strin
 		return def, nil
 	}
 
+	note("正在查询你账号下的 codespace…")
 	envs, err := prov.List(ctx)
 	if err != nil {
 		return "", fmt.Errorf("没有配置目标 codespace，列举也失败了：%w", err)

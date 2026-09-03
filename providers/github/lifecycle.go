@@ -307,3 +307,23 @@ func (p *Provider) Machines(ctx context.Context, target string) ([]providers.Mac
 	}
 	return out, nil
 }
+
+// CreateSources lists repositories a codespace can be created from.
+func (p *Provider) CreateSources(ctx context.Context, limit int) ([]providers.CreateSource, error) {
+	repos, err := p.api.userRepositories(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]providers.CreateSource, 0, len(repos))
+	for _, r := range repos {
+		detail := "分支 " + r.DefaultBranch
+		if r.Private {
+			detail += "，私有"
+		}
+		if len(r.PushedAt) >= 10 {
+			detail += "，最近推送 " + r.PushedAt[:10]
+		}
+		out = append(out, providers.CreateSource{Name: r.FullName, Detail: detail})
+	}
+	return out, nil
+}

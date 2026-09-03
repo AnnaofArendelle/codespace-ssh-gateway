@@ -93,12 +93,19 @@ func (p *Provider) Diagnose(ctx context.Context) []providers.Diagnostic {
 				d.Detail += fmt.Sprintf(", idle timeout %s", env.IdleTimeout)
 			}
 		case errors.Is(err, providers.ErrNotFound):
-			d.Detail = fmt.Sprintf("%s does not exist yet", handle)
-			if p.cfg.Create.Repository != "" {
+			d.Detail = fmt.Sprintf("%s 不存在", handle)
+			switch {
+			case len(list) == 1:
 				d.OK = true
-				d.Detail += fmt.Sprintf("; it will be created from %s on first connection", p.cfg.Create.Repository)
-			} else {
-				d.Hint = "set github.create.repository to allow auto-create, or select an existing codespace"
+				d.Detail += fmt.Sprintf("；会自动改用账号里唯一的 %s", list[0].Name)
+				d.Hint = fmt.Sprintf("想固定下来： gateway codespace select %s", list[0].Name)
+			case p.cfg.Create.Repository != "":
+				d.OK = true
+				d.Detail += fmt.Sprintf("；首次连接时会从 %s 创建", p.cfg.Create.Repository)
+			case len(list) > 1:
+				d.Hint = "账号里有多个 codespace：gateway codespace select <name>"
+			default:
+				d.Hint = "设置 github.create.repository 允许自动创建，或先建一个 codespace"
 			}
 		default:
 			d.Detail = err.Error()

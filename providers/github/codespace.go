@@ -216,6 +216,8 @@ type repository struct {
 	ID            int64  `json:"id"`
 	FullName      string `json:"full_name"`
 	DefaultBranch string `json:"default_branch"`
+	Private       bool   `json:"private"`
+	PushedAt      string `json:"pushed_at"`
 }
 
 func (c *apiClient) getRepository(ctx context.Context, nwo string) (repository, error) {
@@ -229,6 +231,20 @@ func (c *apiClient) getRepository(ctx context.Context, nwo string) (repository, 
 		return repository{}, err
 	}
 	return repo, nil
+}
+
+// userRepositories lists the token owner's repositories, most recently pushed
+// first, so setup can offer them as create sources.
+func (c *apiClient) userRepositories(ctx context.Context, limit int) ([]repository, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	var repos []repository
+	path := fmt.Sprintf("/user/repos?sort=pushed&per_page=%d&affiliation=owner,collaborator", limit)
+	if _, err := c.do(ctx, "GET", path, nil, &repos); err != nil {
+		return nil, err
+	}
+	return repos, nil
 }
 
 // currentUser validates the token and returns the login it belongs to.

@@ -97,6 +97,54 @@ func (a *app) setupHints(path string) {
 		DefaultSSHHost, port)
 }
 
+// setupCreateSource runs only when the account has no environment yet: then the
+// gateway must be told what to create one from, which is the single piece of
+// information nobody can guess.
+func (a *app) setupCreateSource(p *prompter, path string, reg providers.Registration, prov providers.Provider) error {
+	fmt.Fprintf(a.stdout, "\n这个账号还没有 codespace。选一个仓库，第一次 ssh 时 gateway 会自动建一个：\n")
+
+	lister, ok := prov.(providers.CreateSourceLister)
+	if !ok {
+		fmt.Fprintf(a.stdout, "（provider %s 不支持列举，请手动填 github.create.repository）\n", reg.Name)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	sources, err := lister.CreateSources(ctx, 20)
+	cancel()
+	if err != nil {
+		fmt.Fprintf(a.stdout, "  列举仓库失败：%s\n", a.redact.Redact(err.Error()))
+	}
+
+	items := make([]menuItem, 0, len(sources)+2)
+	for _, src := range sources {
+		items = append(items, menuItem{Label: src.Name, Detail: src.Detail})
+	}
+	typeIdx := len(items)
+	items = append(items, menuItem{Label: "手动输入 owner/name", Detail: ""})
+	skipIdx := len(items)
+	items = append(items, menuItem{Label: "以后再说", Detail: "之后可以自己在网页建 codespace，gateway 会记住它的仓库"})
+
+	choice := p.menu("从哪个仓库创建？", items, 0)
+	repo := ""
+	switch choice {
+	case skipIdx:
+		return nil
+	case typeIdx:
+		repo = p.ask("仓库（owner/name）", "")
+	default:
+		repo = items[choice].Label
+	}
+	if repo == "" {
+		return nil
+	}
+	if err := config.Patch(path, []string{reg.ConfigKey, "create", "repository"}, repo); err != nil {
+		return err
+	}
+	fmt.Fprintf(a.stdout, "  已记下：%s（规格用 `gateway codespace machines` 可查，默认由 GitHub 决定）\n", repo)
+	// A stale default would shadow the codespace we are about to create.
+	return config.Patch(path, []string{reg.ConfigKey, reg.DefaultEnvironmentKey}, "")
+}
+
 func (a *app) setupProvider(p *prompter) (providers.Registration, error) {
 	regs := providers.Registrations()
 	switch len(regs) {
@@ -232,9 +280,7 @@ func (a *app) setupEnvironment(p *prompter, path string, reg providers.Registrat
 
 	switch len(envs) {
 	case 0:
-		fmt.Fprintf(a.stdout, "\n这个账号还没有 codespace。先去 https://github.com/codespaces 建一个，\n")
-		fmt.Fprintf(a.stdout, "或者填 github.create.repository 让 gateway 在首次连接时自动创建。\n")
-		return nil
+		return a.setupCreateSource(p, path, reg, prov)
 	case 1:
 		fmt.Fprintf(a.stdout, "\n只有一个 codespace，直接使用：%s（%s）\n", envs[0].ID, envs[0].State)
 		return config.Patch(path, key, envs[0].ID)

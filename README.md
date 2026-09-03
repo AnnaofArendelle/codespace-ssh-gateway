@@ -118,8 +118,12 @@ standardLinux32gb  4    16 GB  32 GB
 写进配置：github.create.machine: <NAME>
 ```
 
-账号里一个 codespace 都没有时，第一次 `ssh` 会以 `codespace` 为名字建一个
+账号里一个 codespace 都没有时，`gateway setup` 会**把你的仓库列成菜单**让你挑一个
+（这是唯一没法自动猜出来的信息），然后第一次 `ssh` 就以 `codespace` 为名字建一个
 （display name 就是这个名字，之后一直用它找回同一个），不需要先去网页上点。
+
+配置里写着的 codespace 被删掉、而账号里恰好还剩一个时，gateway 会**直接改用那一个**
+并在客户端终端里说明，不会为此新建一个。
 
 也可以手动建：`gateway codespace create -option machine=standardLinux32gb`。
 
@@ -298,7 +302,7 @@ gateway doctor [-json]                用真实 API 和 gh 做体检
 gateway config init|show|path|set-token|authorized-key
 gateway provider list
 gateway codespace list|select|status|stop|create|machines|forget-host-key
-gateway ssh-config [-write|-remove] [-host codespace]
+gateway ssh-config [-write|-remove] [-host codespace]   # start 时会自动维护这段
 gateway version
 ```
 
@@ -329,6 +333,8 @@ systemctl --user enable --now ssh-gateway
 - 客户端认证与“网关→codespace”认证完全分离：前者是 `authorized_keys`，
   后者是网关自己生成的 ed25519 密钥（`<state>/providers/github/codespace_ed25519`），
   由 `gh codespace ssh -- -i` 注册进 codespace。
+- `gateway start` 会自动把 `Host codespace` 写进 `~/.ssh/config`（幂等，不碰别人写的条目）。
+  不想让它动这个文件就设 `ssh.install_alias: false`。
 - **客户端认证按监听地址决定**：默认 `127.0.0.1:2222` 且没配置任何凭据时走 SSH 的
   `none` 认证（免密钥免密码）——这一跳的安全边界就是"你已经登录了这台机器"。
   一旦监听地址不是回环地址而又没有公钥/密码，网关**拒绝启动**并告诉你怎么改，

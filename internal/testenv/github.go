@@ -176,6 +176,13 @@ func (g *GitHub) handle(w http.ResponseWriter, r *http.Request) {
 		g.list(w, r)
 	case r.URL.Path == "/user/codespaces" && r.Method == http.MethodPost:
 		g.create(w, r)
+	case r.URL.Path == "/user/repos" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, []map[string]any{
+			{"id": 4242, "full_name": "octo/demo", "default_branch": "main",
+				"private": false, "pushed_at": "2026-09-01T10:00:00Z"},
+			{"id": 4243, "full_name": "octo/other", "default_branch": "trunk",
+				"private": true, "pushed_at": "2026-08-20T10:00:00Z"},
+		})
 	case strings.HasPrefix(r.URL.Path, "/repos/"):
 		writeJSON(w, http.StatusOK, map[string]any{
 			"id": 4242, "full_name": strings.TrimPrefix(r.URL.Path, "/repos/"), "default_branch": "main",

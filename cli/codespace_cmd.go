@@ -151,7 +151,7 @@ func (a *app) envStatus(args []string) error {
 		if len(rest) > 0 {
 			hint = rest[0]
 		}
-		name, err := gateway.ResolveEnvironment(ctx, p, hint)
+		name, err := gateway.ResolveEnvironment(ctx, p, hint, nil)
 		if err != nil {
 			return err
 		}
@@ -210,7 +210,7 @@ func (a *app) envStop(args []string) error {
 	}
 
 	return a.withProvider(5*time.Minute, func(ctx context.Context, cfg *config.Config, p providers.Provider) error {
-		target, err := gateway.ResolveEnvironment(ctx, p, name)
+		target, err := gateway.ResolveEnvironment(ctx, p, name, nil)
 		if err != nil {
 			return err
 		}

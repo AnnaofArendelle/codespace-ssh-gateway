@@ -83,7 +83,7 @@ func (cs *controlServer) handleStop(w http.ResponseWriter, _ *http.Request) {
 // handleStopEnvironment stops one environment on request. This is an explicit
 // operator action, distinct from any idle handling.
 func (cs *controlServer) handleStopEnvironment(w http.ResponseWriter, r *http.Request) {
-	name, err := ResolveEnvironment(r.Context(), cs.g.prov, r.URL.Query().Get("name"))
+	name, err := ResolveEnvironment(r.Context(), cs.g.prov, r.URL.Query().Get("name"), nil)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": cs.g.redact.Redact(err.Error())})
 		return
